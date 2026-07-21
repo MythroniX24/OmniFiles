@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.omnilabs.omfiles.data.local.OmniFilesDatabase
 import com.omnilabs.omfiles.data.local.dao.FavoriteDao
 import com.omnilabs.omfiles.data.local.dao.RecentFileDao
+import com.omnilabs.omfiles.data.local.dao.RecycleBinDao
 import com.omnilabs.omfiles.data.local.dao.SearchIndexDao
 import dagger.Module
 import dagger.Provides
@@ -37,6 +38,11 @@ object AppModule {
     @Provides
     fun provideRecentFileDao(database: OmniFilesDatabase): RecentFileDao {
         return database.recentFileDao()
+    }
+
+    @Provides
+    fun provideRecycleBinDao(database: OmniFilesDatabase): RecycleBinDao {
+        return database.recycleBinDao()
     }
 
     @Provides

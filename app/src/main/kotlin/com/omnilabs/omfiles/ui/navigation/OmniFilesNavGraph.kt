@@ -14,6 +14,7 @@ import androidx.navigation.navArgument
 import com.omnilabs.omfiles.ui.screens.files.FilesScreen
 import com.omnilabs.omfiles.ui.screens.home.HomeScreen
 import com.omnilabs.omfiles.ui.screens.search.SearchScreen
+import com.omnilabs.omfiles.ui.screens.recycle.RecycleBinScreen
 import com.omnilabs.omfiles.ui.screens.settings.SettingsScreen
 import java.net.URLDecoder
 
@@ -96,6 +97,12 @@ fun OmniFilesNavGraph(
 
         composable(NavRoutes.SETTINGS) {
             SettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoutes.RECYCLE) {
+            RecycleBinScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

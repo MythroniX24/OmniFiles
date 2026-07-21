@@ -10,6 +10,7 @@ import com.omnilabs.omfiles.domain.repository.ArchiveRepository
 import com.omnilabs.omfiles.domain.repository.FavoriteRepository
 import com.omnilabs.omfiles.domain.repository.FileRepository
 import com.omnilabs.omfiles.domain.repository.RecentFilesRepository
+import com.omnilabs.omfiles.domain.repository.RecycleBinRepository
 import com.omnilabs.omfiles.domain.repository.SearchRepository
 import com.omnilabs.omfiles.domain.repository.SettingsRepository
 import dagger.Binds
@@ -45,4 +46,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSearchRepository(impl: SearchRepositoryImpl): SearchRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRecycleBinRepository(impl: RecycleBinRepositoryImpl): RecycleBinRepository
 }

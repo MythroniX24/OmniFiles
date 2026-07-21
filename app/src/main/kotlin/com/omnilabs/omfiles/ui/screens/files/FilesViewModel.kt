@@ -13,6 +13,7 @@ import com.omnilabs.omfiles.domain.repository.ArchiveRepository
 import com.omnilabs.omfiles.domain.repository.FavoriteRepository
 import com.omnilabs.omfiles.domain.repository.FileRepository
 import com.omnilabs.omfiles.domain.repository.RecentFilesRepository
+import com.omnilabs.omfiles.domain.repository.RecycleBinRepository
 import com.omnilabs.omfiles.domain.repository.SettingsRepository
 import com.omnilabs.omfiles.utils.FileUtils
 import com.omnilabs.omfiles.utils.PermissionHandler
@@ -63,6 +64,7 @@ class FilesViewModel @Inject constructor(
     private val favoriteRepository: FavoriteRepository,
     private val recentFilesRepository: RecentFilesRepository,
     private val archiveRepository: ArchiveRepository,
+    private val recycleBinRepository: RecycleBinRepository,
     settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -338,12 +340,12 @@ class FilesViewModel @Inject constructor(
             _showDeleteConfirmation.value = false
             val paths = _pendingDeletePaths.value.toList()
             _pendingDeletePaths.value = emptySet()
-            setOperation("Deleting ${paths.size} item${if (paths.size != 1) "s" else ""}\u2026")
+            setOperation("Moving ${paths.size} item${if (paths.size != 1) "s" else ""} to Recycle Bin\u2026")
 
             var successCount = 0
             var failCount = 0
             for (path in paths) {
-                when (val result = fileRepository.deleteFile(path)) {
+                when (val result = recycleBinRepository.moveToTrash(path)) {
                     is OperationResult.Success -> successCount++
                     is OperationResult.Error -> failCount++
                 }
@@ -353,7 +355,9 @@ class FilesViewModel @Inject constructor(
             exitSelectionMode()
             loadFiles(_currentPath.value)
             if (failCount > 0) {
-                _error.value = "Deleted $successCount item(s), $failCount failed"
+                _error.value = "Moved $successCount item(s) to Recycle Bin, $failCount failed"
+            } else {
+                _error.value = "$successCount item(s) moved to Recycle Bin"
             }
         }
     }
