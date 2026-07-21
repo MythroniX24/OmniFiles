@@ -9,6 +9,7 @@ import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
+import org.apache.commons.compress.archivers.zip.ZipEncryptionMethod
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
@@ -113,7 +114,7 @@ class ArchiveEngine @Inject constructor() {
                 "tar" -> {
                     ArchiveStreamFactory().createArchiveInputStream(
                         BufferedInputStream(FileInputStream(archiveFile))
-                    ).use { ais: ArchiveInputStream<ArchiveEntry> ->
+                    ).use { ais: ArchiveInputStream<*> ->
                         var entry: ArchiveEntry? = ais.nextEntry
                         while (entry != null) {
                             entries.add(entry.name)
@@ -127,7 +128,7 @@ class ArchiveEngine @Inject constructor() {
                     )
                     ArchiveStreamFactory().createArchiveInputStream(
                         BufferedInputStream(gzipStream)
-                    ).use { ais: ArchiveInputStream<ArchiveEntry> ->
+                    ).use { ais: ArchiveInputStream<*> ->
                         var entry: ArchiveEntry? = ais.nextEntry
                         while (entry != null) {
                             entries.add(entry.name)
@@ -151,7 +152,7 @@ class ArchiveEngine @Inject constructor() {
                 "zip" -> {
                     ZipFile(file).use { zipFile ->
                         zipFile.entries.asIterator().forEach { entry ->
-                            if (entry is ZipArchiveEntry && entry.encryptionMethod != null) return@withContext true
+                            if (entry is ZipArchiveEntry && entry.encryptionMethod != ZipEncryptionMethod.NONE) return@withContext true
                         }
                     }
                     false
@@ -239,7 +240,7 @@ class ArchiveEngine @Inject constructor() {
     }
 
     private fun extractTar(archive: File, dest: File) {
-        val ais: ArchiveInputStream<ArchiveEntry> = ArchiveStreamFactory().createArchiveInputStream(
+        val ais: ArchiveInputStream<*> = ArchiveStreamFactory().createArchiveInputStream(
             ArchiveStreamFactory.TAR,
             BufferedInputStream(FileInputStream(archive))
         )
@@ -262,7 +263,7 @@ class ArchiveEngine @Inject constructor() {
         val gzipStream = GzipCompressorInputStream(
             BufferedInputStream(FileInputStream(archive))
         )
-        val ais: ArchiveInputStream<ArchiveEntry> = ArchiveStreamFactory().createArchiveInputStream(
+        val ais: ArchiveInputStream<*> = ArchiveStreamFactory().createArchiveInputStream(
             ArchiveStreamFactory.TAR,
             BufferedInputStream(gzipStream)
         )
@@ -277,7 +278,7 @@ class ArchiveEngine @Inject constructor() {
         }
     }
 
-    private fun extractFromStream(ais: ArchiveInputStream<ArchiveEntry>, dest: File) {
+    private fun extractFromStream(ais: ArchiveInputStream<*>, dest: File) {
         var entry: ArchiveEntry? = ais.nextEntry
         while (entry != null) {
             val outputFile = File(dest, entry.name)

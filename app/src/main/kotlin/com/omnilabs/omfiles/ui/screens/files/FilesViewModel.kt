@@ -93,52 +93,39 @@ class FilesViewModel @Inject constructor(
     private val _operationInProgress = MutableStateFlow(false)
     private val _operationMessage = MutableStateFlow<String?>(null)
 
-    // Split combine into groups (max 10 flows per combine for Kotlin 2.1 compatibility)
-    private val statePart1 = combine(
-        _currentPath, _files, _favorites, _sortOptions, _showHidden, _isLoading,
-        _selectedFiles, _selectionMode, _hasStoragePermission,
-        _showDeleteConfirmation
-    ) { path, files, favorites, sortOpts, showHidden, loading,
-        selFiles, selMode, hasPerm, showDel ->
-        arrayOf<Any?>(path, files, favorites, sortOpts, showHidden, loading, selFiles, selMode, hasPerm, showDel)
-    }
-
-    private val statePart2 = combine(
-        _showRenameDialog, _renameTarget, _showCreateFolderDialog, _showCreateFileDialog,
-        _pendingDeletePaths, _showPropertiesDialog, _propertiesTarget,
-        _showExtractDialog, _extractTarget, _operationInProgress
-    ) { showRen, renTarget, showCrtFld, showCrtFile, pendingDel,
-        showProps, propsTarget, showExtract, extractTarget, opInProgress ->
-        arrayOf<Any?>(showRen, renTarget, showCrtFld, showCrtFile, pendingDel, showProps, propsTarget, showExtract, extractTarget, opInProgress)
-    }
-
-    private val statePart3 = _operationMessage
-
+    // Use Iterable-based combine to avoid Kotlin 2.1 flow count limit on combine overloads
     val uiState: StateFlow<FilesUiState> = combine(
-        statePart1, statePart2, statePart3
-    ) { part1, part2, opMsg ->
+        listOf<StateFlow<*>>(
+            _currentPath, _files, _favorites, _sortOptions, _showHidden, _isLoading,
+            _selectedFiles, _selectionMode, _hasStoragePermission,
+            _showDeleteConfirmation, _showRenameDialog, _renameTarget,
+            _showCreateFolderDialog, _showCreateFileDialog, _pendingDeletePaths,
+            _showPropertiesDialog, _propertiesTarget, _showExtractDialog, _extractTarget,
+            _operationInProgress, _operationMessage
+        )
+    ) { values ->
         FilesUiState(
-            currentPath = part1[0] as String,
-            files = part1[1] as List<FileInfo>,
-            selectedFiles = part1[6] as Set<String>,
-            sortOptions = part1[3] as FileSortOptions,
-            favorites = part1[2] as Set<String>,
-            showHidden = part1[4] as Boolean,
-            isLoading = part1[5] as Boolean,
-            hasStoragePermission = part1[8] as Boolean,
-            selectionMode = part1[7] as Boolean,
-            showDeleteConfirmation = part1[9] as Boolean,
-            showRenameDialog = part2[0] as Boolean,
-            renameTarget = part2[1] as String?,
-            showCreateFolderDialog = part2[2] as Boolean,
-            showCreateFileDialog = part2[3] as Boolean,
-            pendingDeletePaths = part2[4] as Set<String>,
-            showPropertiesDialog = part2[5] as Boolean,
-            propertiesTarget = part2[6] as FileInfo?,
-            showExtractDialog = part2[7] as Boolean,
-            extractTarget = part2[8] as String?,
-            operationInProgress = part2[9] as Boolean,
-            operationMessage = opMsg
+            currentPath = values[0] as String,
+            files = values[1] as List<FileInfo>,
+            selectedFiles = values[6] as Set<String>,
+            sortOptions = values[3] as FileSortOptions,
+            favorites = values[2] as Set<String>,
+            showHidden = values[4] as Boolean,
+            isLoading = values[5] as Boolean,
+            hasStoragePermission = values[8] as Boolean,
+            selectionMode = values[7] as Boolean,
+            showDeleteConfirmation = values[9] as Boolean,
+            showRenameDialog = values[10] as Boolean,
+            renameTarget = values[11] as String?,
+            showCreateFolderDialog = values[12] as Boolean,
+            showCreateFileDialog = values[13] as Boolean,
+            pendingDeletePaths = values[14] as Set<String>,
+            showPropertiesDialog = values[15] as Boolean,
+            propertiesTarget = values[16] as FileInfo?,
+            showExtractDialog = values[17] as Boolean,
+            extractTarget = values[18] as String?,
+            operationInProgress = values[19] as Boolean,
+            operationMessage = values[20] as String?
         )
     }.stateIn(
         scope = viewModelScope,
