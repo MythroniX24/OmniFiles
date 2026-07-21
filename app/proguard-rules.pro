@@ -32,6 +32,10 @@
 -dontwarn org.apache.commons.logging.**
 -keep class org.apache.commons.compress.** { *; }
 
+# junrar
+-keep class com.github.junrar.** { *; }
+-dontwarn com.github.junrar.**
+
 # Gson / serialization
 -keepattributes Signature
 -keepattributes *Annotation*

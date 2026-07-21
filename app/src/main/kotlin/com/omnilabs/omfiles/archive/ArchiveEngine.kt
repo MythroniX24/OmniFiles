@@ -96,7 +96,9 @@ class ArchiveEngine @Inject constructor() {
             when (extension) {
                 "zip" -> {
                     ZipFile(archiveFile).use { zipFile ->
-                        zipFile.entries.asIterator().forEach { entry ->
+                        val zipEntries = zipFile.entries
+                        while (zipEntries.hasMoreElements()) {
+                            val entry = zipEntries.nextElement()
                             entries.add(entry.name)
                         }
                     }
@@ -152,9 +154,11 @@ class ArchiveEngine @Inject constructor() {
             when (file.extension.lowercase()) {
                 "zip" -> {
                     try {
-                        // Try to open zip - if it fails, assume password protected
                         ZipFile(file).use { zipFile ->
-                            zipFile.entries.asIterator().forEach { _ -> return@withContext false }
+                            val zipEntries = zipFile.entries
+                            while (zipEntries.hasMoreElements()) {
+                                zipEntries.nextElement() // successfully iterating means not password-protected
+                            }
                         }
                         false
                     } catch (_: Exception) {
@@ -183,7 +187,9 @@ class ArchiveEngine @Inject constructor() {
             return
         }
         ZipFile(archive).use { zipFile ->
-            zipFile.entries.asIterator().forEach { entry ->
+            val zipEntries = zipFile.entries
+            while (zipEntries.hasMoreElements()) {
+                val entry = zipEntries.nextElement()
                 val entryName = entry.name
                 val outputFile = File(dest, entryName)
                 if (entry.isDirectory) {
@@ -202,7 +208,9 @@ class ArchiveEngine @Inject constructor() {
 
     private fun extractZipWithPassword(archive: File, dest: File, password: String) {
         ZipFile(archive).use { zipFile ->
-            zipFile.entries.asIterator().forEach { entry ->
+            val zipEntries = zipFile.entries
+            while (zipEntries.hasMoreElements()) {
+                val entry = zipEntries.nextElement()
                 val outputFile = File(dest, entry.name)
                 if (entry.isDirectory) {
                     outputFile.mkdirs()
