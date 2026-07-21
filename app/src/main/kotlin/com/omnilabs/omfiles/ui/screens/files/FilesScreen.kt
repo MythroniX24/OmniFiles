@@ -80,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.omnilabs.omfiles.domain.model.FileInfo
 import com.omnilabs.omfiles.domain.model.FileType
@@ -491,10 +492,8 @@ fun FilesScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                         .padding(horizontal = 16.dp)
-                        .onGloballyPositioned { coords ->
-                            val bounds = coords.boundsInWindow()
-                            listTop = bounds.top
-                            listBottom = bounds.bottom
+                        .onSizeChanged { size ->
+                            listBottom = size.height.toFloat()
                         },
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
