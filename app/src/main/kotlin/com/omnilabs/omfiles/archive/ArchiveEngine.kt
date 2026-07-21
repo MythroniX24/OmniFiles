@@ -151,7 +151,7 @@ class ArchiveEngine @Inject constructor() {
                 "zip" -> {
                     ZipFile(file).use { zipFile ->
                         zipFile.entries.asIterator().forEach { entry ->
-                            if (entry is ZipArchiveEntry && entry.isEncrypted) return@withContext true
+                            if (entry is ZipArchiveEntry && entry.encryptionMethod != null) return@withContext true
                         }
                     }
                     false

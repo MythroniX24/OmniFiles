@@ -112,7 +112,7 @@ fun SearchScreen(
                     onClick = viewModel::indexStorage,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Filled.Storage, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Index Storage for Faster Search")
                 }

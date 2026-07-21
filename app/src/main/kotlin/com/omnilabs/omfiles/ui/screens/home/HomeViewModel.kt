@@ -79,23 +79,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    init {
-        loadData()
-    }
-
-    private fun loadData() {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                // Storage volumes are loaded reactively
-                _isLoading.value = false
-            } catch (e: Exception) {
-                _error.value = "Failed to load data: ${e.message}"
-                _isLoading.value = false
-            }
-        }
-    }
-
     fun clearError() {
         _error.value = null
     }
