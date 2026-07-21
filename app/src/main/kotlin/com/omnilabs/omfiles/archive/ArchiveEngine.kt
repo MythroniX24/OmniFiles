@@ -9,7 +9,6 @@ import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
-import org.apache.commons.compress.archivers.zip.ZipEncryptionMethod
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
@@ -112,9 +111,10 @@ class ArchiveEngine @Inject constructor() {
                     }
                 }
                 "tar" -> {
-                    ArchiveStreamFactory().createArchiveInputStream(
+                    val tarInput: ArchiveInputStream<*> = ArchiveStreamFactory().createArchiveInputStream(
                         BufferedInputStream(FileInputStream(archiveFile))
-                    ).use { ais: ArchiveInputStream<*> ->
+                    ) as ArchiveInputStream<*>
+                    tarInput.use { ais ->
                         var entry: ArchiveEntry? = ais.nextEntry
                         while (entry != null) {
                             entries.add(entry.name)
@@ -126,9 +126,10 @@ class ArchiveEngine @Inject constructor() {
                     val gzipStream = GzipCompressorInputStream(
                         BufferedInputStream(FileInputStream(archiveFile))
                     )
-                    ArchiveStreamFactory().createArchiveInputStream(
+                    val tgzInput: ArchiveInputStream<*> = ArchiveStreamFactory().createArchiveInputStream(
                         BufferedInputStream(gzipStream)
-                    ).use { ais: ArchiveInputStream<*> ->
+                    ) as ArchiveInputStream<*>
+                    tgzInput.use { ais ->
                         var entry: ArchiveEntry? = ais.nextEntry
                         while (entry != null) {
                             entries.add(entry.name)
@@ -150,12 +151,15 @@ class ArchiveEngine @Inject constructor() {
             val file = File(archivePath)
             when (file.extension.lowercase()) {
                 "zip" -> {
-                    ZipFile(file).use { zipFile ->
-                        zipFile.entries.asIterator().forEach { entry ->
-                            if (entry is ZipArchiveEntry && entry.encryptionMethod != ZipEncryptionMethod.NONE) return@withContext true
+                    try {
+                        // Try to open zip - if it fails, assume password protected
+                        ZipFile(file).use { zipFile ->
+                            zipFile.entries.asIterator().forEach { _ -> return@withContext false }
                         }
+                        false
+                    } catch (_: Exception) {
+                        true
                     }
-                    false
                 }
                 "7z" -> {
                     try {

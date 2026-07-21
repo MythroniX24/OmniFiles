@@ -492,7 +492,7 @@ fun FilesScreen(
                         .padding(paddingValues)
                         .padding(horizontal = 16.dp)
                         .onGloballyPositioned { coords ->
-                            val pos = coords.positionInRoot()
+                            val pos = coords.positionInWindow()
                             listTop = pos.y
                             listBottom = pos.y + coords.size.height.toFloat()
                         },
