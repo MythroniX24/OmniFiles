@@ -36,6 +36,13 @@
 -keep class com.github.junrar.** { *; }
 -dontwarn com.github.junrar.**
 
+# Commons Compress optional dependencies (Zstd, Brotli, ASM, SLF4J)
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.**
+-dontwarn org.objectweb.asm.**
+-dontwarn org.slf4j.**
+-dontwarn edu.umd.cs.findbugs.**
+
 # Gson / serialization
 -keepattributes Signature
 -keepattributes *Annotation*

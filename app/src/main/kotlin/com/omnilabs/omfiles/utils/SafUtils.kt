@@ -1,5 +1,6 @@
 package com.omnilabs.omfiles.utils
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -159,7 +160,7 @@ object SafUtils {
         } catch (_: Exception) { }
 
         // External storage volumes (SD cards, USB OTG)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val storageManager = context.getSystemService(Context.STORAGE_SERVICE)
                     as android.os.storage.StorageManager
