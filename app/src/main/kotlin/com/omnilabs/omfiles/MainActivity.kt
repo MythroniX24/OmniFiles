@@ -1,19 +1,45 @@
 package com.omnilabs.omfiles
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.omnilabs.omfiles.core.GlobalExceptionHandler
 import com.omnilabs.omfiles.core.theme.OmniFilesTheme
 import com.omnilabs.omfiles.domain.model.ThemeMode
 import com.omnilabs.omfiles.domain.repository.SettingsRepository
@@ -48,10 +74,118 @@ class MainActivity : ComponentActivity() {
                 darkTheme = isDarkTheme,
                 dynamicColor = dynamicColors
             ) {
+                CrashErrorDialog()
                 MainScreen()
             }
         }
     }
+}
+
+@Composable
+private fun CrashErrorDialog() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showCrashDialog by remember { mutableStateOf(GlobalExceptionHandler.hasCachedCrash(context)) }
+    var showFullStack by remember { mutableStateOf(false) }
+
+    if (showCrashDialog) {
+        val crash = GlobalExceptionHandler.getCachedCrash(context)
+        if (crash != null) {
+            AlertDialog(
+                onDismissRequest = { },
+                title = {
+                    Column {
+                        Text(
+                            "⚠ App Crashed",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            crash.time,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "The app crashed due to an unexpected error:",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            crash.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            "Thread: ${crash.threadName}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        TextButton(onClick = { showFullStack = !showFullStack }) {
+                            Text(if (showFullStack) "Hide details" else "Show full error")
+                        }
+
+                        if (showFullStack) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    crash.stackTrace,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp,
+                                    maxLines = 50,
+                                    overflow = TextOverflow.Visible
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            // Copy crash info to clipboard
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as ClipboardManager
+                            val clip = ClipData.newPlainText(
+                                "Crash Report",
+                                "Time: ${crash.time}\n" +
+                                "Thread: ${crash.threadName}\n" +
+                                "Error: ${crash.message}\n\n" +
+                                "Stack:\n${crash.stackTrace}"
+                            )
+                            clipboard.setPrimaryClip(clip)
+                        }
+                    ) {
+                        Text("Copy Report")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            GlobalExceptionHandler.clearCachedCrash(context)
+                            showCrashDialog = false
+                        }
+                    ) {
+                        Text("Dismiss")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
+    }
+
+
 }
 
 @Composable
