@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="omni_primary">#FF6750A4</color>
+    <color name="omni_on_primary">#FFFFFFFF</color>
+    <color name="omni_primary_container">#FFEADDFF</color>
+    <color name="omni_secondary">#FF625B71</color>
+    <color name="omni_background">#FFFFFBFE</color>
+    <color name="omni_surface">#FFFFFBFE</color>
+    <color name="omni_error">#FFB3261E</color>
+    <color name="omni_file">#FF5B9BD5</color>
+    <color name="omni_folder">#FFFFC107</color>
+    <color name="omni_image">#FF4CAF50</color>
+    <color name="omni_video">#FFF44336</color>
+    <color name="omni_audio">#FF9C27B0</color>
+    <color name="omni_archive">#FFFF9800</color>
+    <color name="omni_apk">#FF2196F3</color>
+</resources>

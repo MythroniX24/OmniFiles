@@ -1,0 +1,20 @@
+package com.omnilabs.omfiles.data.local.entity
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "recent_files")
+data class RecentFileEntity(
+    @PrimaryKey
+    val path: String,
+    val name: String,
+    val extension: String,
+    @ColumnInfo(name = "is_directory")
+    val isDirectory: Boolean,
+    val size: Long,
+    @ColumnInfo(name = "last_modified")
+    val lastModified: Long,
+    @ColumnInfo(name = "opened_at")
+    val openedAt: Long
+)

@@ -1,0 +1,44 @@
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Android APK / AAB
+*.apk
+*.aab
+*.ap_
+
+# Keystore
+*.jks
+*.keystore
+release-key.*
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Kotlin
+*.class
+
+# System
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Secrets
+secrets.properties

@@ -1,0 +1,43 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.omnilabs.omfiles.app-mergeDebugResources-2:/values-night-v8/values-night-v8.xml",
+            "map": [
+                {
+                    "source": "/mnt/sdcard/Download/OmniFiles/OmniFiles/app/src/main/res/values-night/colors.xml",
+                    "from": {
+                        "startLines": "6,8,3,2,4,5,7",
+                        "startColumns": "4,4,4,4,4,4,4",
+                        "startOffsets": "266,367,104,55,156,215,318",
+                        "endColumns": "51,46,51,48,58,50,48",
+                        "endOffsets": "313,409,151,99,210,261,362"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8",
+                        "startColumns": "4,4,4,4,4,4,4",
+                        "startOffsets": "55,107,154,206,255,314,365",
+                        "endColumns": "51,46,51,48,58,50,48",
+                        "endOffsets": "102,149,201,250,309,360,409"
+                    }
+                },
+                {
+                    "source": "/root/.gradle/caches/8.9/transforms/032cc2af9fb8c112daf4491cde9c3d16/transformed/core-splashscreen-1.0.1/res/values-night-v8/values-night-v8.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "85",
+                        "endOffsets": "136"
+                    },
+                    "to": {
+                        "startLines": "9",
+                        "startColumns": "4",
+                        "startOffsets": "414",
+                        "endColumns": "85",
+                        "endOffsets": "495"
+                    }
+                }
+            ]
+        }
+    ]
+}
