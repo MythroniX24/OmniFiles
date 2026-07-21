@@ -40,7 +40,7 @@ class FileRepositoryImpl @Inject constructor() : FileRepository {
         val mapped = files
             .filter { showHidden || !it.isHidden }
             .map { FileInfo.fromFile(it) }
-            .sortedWith(compareBy(sortOptions) { it })
+            .sortedWith(compareBy(sortOptions))
 
         emit(mapped)
     }.flowOn(Dispatchers.IO)
@@ -307,9 +307,9 @@ class FileRepositoryImpl @Inject constructor() : FileRepository {
         }
 
         return if (options.foldersFirst) {
-            compareByDescending<FileInfo> { it.isDirectory }.thenBy(withOrder)
+            compareByDescending<FileInfo> { it.isDirectory }.then(withOrder)
         } else {
-            compareBy<FileInfo> { it.isDirectory }.thenBy(withOrder)
+            compareBy<FileInfo> { it.isDirectory }.then(withOrder)
         }
     }
 }

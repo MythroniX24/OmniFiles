@@ -4,13 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.ArchiveEntry
 import org.apache.commons.compress.archivers.ArchiveInputStream
-import org.apache.commons.compress.archivers.ArchiveOutputStream
 import org.apache.commons.compress.archivers.ArchiveStreamFactory
-import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
-import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
@@ -116,8 +113,8 @@ class ArchiveEngine @Inject constructor() {
                 "tar" -> {
                     ArchiveStreamFactory().createArchiveInputStream(
                         BufferedInputStream(FileInputStream(archiveFile))
-                    ).use { ais ->
-                        var entry = ais.nextEntry
+                    ).use { ais: ArchiveInputStream<ArchiveEntry> ->
+                        var entry: ArchiveEntry? = ais.nextEntry
                         while (entry != null) {
                             entries.add(entry.name)
                             entry = ais.nextEntry
@@ -130,8 +127,8 @@ class ArchiveEngine @Inject constructor() {
                     )
                     ArchiveStreamFactory().createArchiveInputStream(
                         BufferedInputStream(gzipStream)
-                    ).use { ais ->
-                        var entry = ais.nextEntry
+                    ).use { ais: ArchiveInputStream<ArchiveEntry> ->
+                        var entry: ArchiveEntry? = ais.nextEntry
                         while (entry != null) {
                             entries.add(entry.name)
                             entry = ais.nextEntry
@@ -242,12 +239,11 @@ class ArchiveEngine @Inject constructor() {
     }
 
     private fun extractTar(archive: File, dest: File) {
-        ArchiveStreamFactory().createArchiveInputStream(
+        val ais: ArchiveInputStream<ArchiveEntry> = ArchiveStreamFactory().createArchiveInputStream(
             ArchiveStreamFactory.TAR,
             BufferedInputStream(FileInputStream(archive))
-        ).use { ais ->
-            extractFromStream(ais, dest)
-        }
+        )
+        ais.use { extractFromStream(it, dest) }
     }
 
     private fun extractGzip(archive: File, dest: File) {
@@ -266,24 +262,23 @@ class ArchiveEngine @Inject constructor() {
         val gzipStream = GzipCompressorInputStream(
             BufferedInputStream(FileInputStream(archive))
         )
-        ArchiveStreamFactory().createArchiveInputStream(
+        val ais: ArchiveInputStream<ArchiveEntry> = ArchiveStreamFactory().createArchiveInputStream(
             ArchiveStreamFactory.TAR,
             BufferedInputStream(gzipStream)
-        ).use { ais ->
-            extractFromStream(ais, dest)
-        }
+        )
+        ais.use { extractFromStream(it, dest) }
     }
 
     private fun extractRar(archive: File, dest: File) {
         try {
             com.github.junrar.Junrar.extract(archive.absolutePath, dest.absolutePath)
-        } catch (_: Exception) {
-            throw UnsupportedOperationException("RAR extraction failed: ${_?.message ?: "Unknown error"}")
+        } catch (e: Exception) {
+            throw UnsupportedOperationException("RAR extraction failed: ${e.message ?: "Unknown error"}")
         }
     }
 
-    private fun extractFromStream(ais: ArchiveInputStream, dest: File) {
-        var entry = ais.nextEntry
+    private fun extractFromStream(ais: ArchiveInputStream<ArchiveEntry>, dest: File) {
+        var entry: ArchiveEntry? = ais.nextEntry
         while (entry != null) {
             val outputFile = File(dest, entry.name)
             if (entry.isDirectory) {

@@ -208,13 +208,13 @@ fun FilesScreen(
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.renameTarget?.let { path ->
-                            viewModel.renameFile(path, renameText.ifEmpty { targetName })
-                            renameText = ""
+                Button(                        onClick = {
+                            val path = uiState.renameTarget
+                            if (path != null) {
+                                viewModel.renameFile(path, renameText.ifEmpty { targetName })
+                                renameText = ""
+                            }
                         }
-                    }
                 ) { Text("Rename") }
             },
             dismissButton = {
