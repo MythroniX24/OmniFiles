@@ -1,17 +1,15 @@
 package com.omnilabs.omfiles.ui.screens.files
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,34 +18,33 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FileCopy
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MoveDown
-import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,8 +54,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,22 +72,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.omnilabs.omfiles.domain.model.FileInfo
 import com.omnilabs.omfiles.domain.model.FileType
 import com.omnilabs.omfiles.domain.model.SortMode
-import com.omnilabs.omfiles.domain.model.SortOrder
 import com.omnilabs.omfiles.ui.components.FileListItem
 import com.omnilabs.omfiles.utils.PermissionHandler
-import com.omnilabs.omfiles.utils.formatFileSize
 import com.omnilabs.omfiles.utils.formatDate
+import com.omnilabs.omfiles.utils.formatFileSize
+import kotlinx.coroutines.delay
 
 private const val SCROLL_ZONE_DP = 120
 private const val MAX_SCROLL_SPEED = 250
@@ -101,6 +98,7 @@ fun FilesScreen(
     initialPath: String,
     onNavigateBack: () -> Unit,
     onNavigateToFolder: (String) -> Unit,
+    onNavigateToSearch: () -> Unit = {},
     viewModel: FilesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -117,7 +115,6 @@ fun FilesScreen(
     var draggedFilePath by remember { mutableStateOf<String?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var dropTargetPath by remember { mutableStateOf<String?>(null) }
-
     var touchStartScreenY by remember { mutableFloatStateOf(0f) }
 
     val lazyListState = rememberLazyListState()
@@ -270,296 +267,337 @@ fun FilesScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (uiState.selectionMode) {
-                // Selection mode top bar — Copy / Cut / Rename / Delete / Share
-                TopAppBar(
-                    title = {
-                        Text(
-                            "${uiState.selectedFiles.size} selected",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                SelectionTopAppBar(
+                    selectedCount = uiState.selectedFiles.size,
+                    onExit = viewModel::exitSelectionMode,
+                    onCopy = viewModel::copyToClipboard,
+                    onCut = viewModel::cutToClipboard,
+                    onRename = {
+                        uiState.selectedFiles.firstOrNull()?.let { viewModel.showRenameDialog(it) }
                     },
-                    navigationIcon = {
-                        IconButton(onClick = viewModel::exitSelectionMode) {
-                            Icon(Icons.Filled.Close, "Exit selection")
+                    onDelete = { viewModel.showDeleteConfirmation(uiState.selectedFiles) },
+                    onShare = {
+                        uiState.selectedFiles.firstOrNull()?.let { path ->
+                            uiState.files.firstOrNull { it.path == path }?.let { viewModel.shareFile(it) }
                         }
-                    },
-                    actions = {
-                        IconButton(onClick = viewModel::copyToClipboard) {
-                            Icon(Icons.Filled.ContentCopy, "Copy")
-                        }
-                        IconButton(onClick = viewModel::cutToClipboard) {
-                            Icon(Icons.Filled.ContentCut, "Cut")
-                        }
-                        IconButton(onClick = {
-                            uiState.selectedFiles.firstOrNull()?.let {
-                                viewModel.showRenameDialog(it)
-                            }
-                        }) {
-                            Icon(Icons.Filled.DriveFileRenameOutline, "Rename")
-                        }
-                        IconButton(onClick = {
-                            viewModel.showDeleteConfirmation(uiState.selectedFiles)
-                        }) {
-                            Icon(Icons.Filled.Delete, "Delete")
-                        }
-                        IconButton(onClick = {
-                            uiState.selectedFiles.firstOrNull()?.let {
-                                viewModel.shareFile(
-                                    uiState.files.first { f -> f.path == it }
-                                )
-                            }
-                        }) {
-                            Icon(Icons.Filled.Share, "Share")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                    }
                 )
             } else {
-                // Normal top bar
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = uiState.currentPath.substringAfterLast('/').ifEmpty { "Internal Storage" },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (uiState.files.isNotEmpty()) {
-                                Text(
-                                    text = "${uiState.files.size} items",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                        }
-                    },
-                    actions = {
-                        // Paste button — visible when clipboard has items
-                        if (uiState.clipboardPaths.isNotEmpty()) {
-                            val modeLabel = if (uiState.clipboardMode == "cut") "Paste (Move)" else "Paste (Copy)"
-                            IconButton(onClick = viewModel::pasteFromClipboard) {
-                                Icon(
-                                    Icons.Filled.ContentPaste,
-                                    contentDescription = modeLabel,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(onClick = viewModel::clearClipboard) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "Clear clipboard",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        if (uiState.currentPath != "/") {
-                            IconButton(onClick = viewModel::navigateUp) {
-                                Icon(Icons.Filled.OpenInNew, "Go up", modifier = Modifier.size(20.dp))
-                            }
-                        }
-                        IconButton(onClick = viewModel::refresh) {
-                            Icon(Icons.Filled.Refresh, "Refresh")
-                        }
-                        var showMenu by remember { mutableStateOf(false) }
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Filled.MoreVert, "More options")
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Create Folder") },
-                                onClick = { showMenu = false; viewModel.showCreateFolderDialog() },
-                                leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Create File") },
-                                onClick = { showMenu = false; viewModel.showCreateFileDialog() },
-                                leadingIcon = { Icon(Icons.Filled.NoteAdd, null) }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Sort by Name") },
-                                onClick = { showMenu = false; viewModel.setSortMode(SortMode.NAME) },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Sort by Date") },
-                                onClick = { showMenu = false; viewModel.setSortMode(SortMode.DATE) },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Sort by Size") },
-                                onClick = { showMenu = false; viewModel.setSortMode(SortMode.SIZE) },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Sort by Extension") },
-                                onClick = { showMenu = false; viewModel.setSortMode(SortMode.EXTENSION) },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null) }
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                FilesTopAppBar(
+                    onSearchClick = onNavigateToSearch,
+                    onAccountClick = { /* TODO */ }
                 )
+            }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { viewModel.showCreateFolderDialog() },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Add", modifier = Modifier.size(32.dp))
             }
         }
     ) { paddingValues ->
-        if (uiState.operationInProgress) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                uiState.operationMessage?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Breadcrumb bar
+            if (!uiState.selectionMode) {
+                BreadcrumbBar(path = uiState.currentPath)
+            }
+
+            if (uiState.operationInProgress) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    uiState.operationMessage?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                uiState.files.isEmpty() -> {
+                    EmptyFolderView()
+                }
+                else -> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = lazyListState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .onGloballyPositioned { coordinates ->
+                                    listScreenTop = coordinates.positionInRoot().y
+                                    listBottom = listScreenTop + coordinates.size.height
+                                },
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
+                        ) {
+                            items(items = uiState.files, key = { it.path }) { fileInfo ->
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                FileListItem(
+                                    fileInfo = fileInfo,
+                                    isSelected = fileInfo.path in uiState.selectedFiles,
+                                    isDropTarget = fileInfo.path == dropTargetPath,
+                                    selectionMode = uiState.selectionMode,
+                                    onSingleClick = {
+                                        if (uiState.selectionMode) viewModel.toggleSelection(fileInfo.path)
+                                        else if (fileInfo.isDirectory) onNavigateToFolder(fileInfo.path)
+                                        else viewModel.openFile(fileInfo)
+                                    },
+                                    onLongClick = {
+                                        if (!uiState.selectionMode) viewModel.enterSelectionMode(fileInfo.path)
+                                    },
+                                    onOptionsClick = { viewModel.showPropertiesDialog(fileInfo) },
+                                    onDragStart = { path, touchY ->
+                                        if (uiState.selectionMode) return@FileListItem
+                                        val index = uiState.files.indexOfFirst { it.path == path }
+                                        val itemInfo = lazyListState.layoutInfo.visibleItemsInfo
+                                            .find { it.index == index }
+                                        if (itemInfo != null) {
+                                            isDragging = true
+                                            draggedFilePath = path
+                                            touchStartScreenY = listScreenTop + itemInfo.offset + touchY
+                                            dragOffsetY = 0f
+                                            dropTargetPath = null
+                                        }
+                                    },
+                                    onDrag = { _, dy ->
+                                        dragOffsetY += dy
+                                        val fingerScreenY = touchStartScreenY + dragOffsetY
+                                        val fingerInList = fingerScreenY - listScreenTop
+                                        dropTargetPath = null
+
+                                        for (item in lazyListState.layoutInfo.visibleItemsInfo) {
+                                            if (fingerInList >= item.offset && fingerInList <= item.offset + item.size) {
+                                                val file = uiState.files.getOrNull(item.index)
+                                                if (file?.isDirectory == true && file.path != draggedFilePath) {
+                                                    dropTargetPath = file.path
+                                                }
+                                                break
+                                            }
+                                        }
+
+                                        val scrollZonePx = with(density) { SCROLL_ZONE_DP.dp.toPx() }
+                                        val listHeight = listBottom - listScreenTop
+                                        scrollSpeed = when {
+                                            fingerInList < scrollZonePx -> {
+                                                val proximity = 1f - (fingerInList / scrollZonePx)
+                                                -(proximity * MAX_SCROLL_SPEED).toInt().coerceAtMost(MAX_SCROLL_SPEED)
+                                            }
+                                            fingerInList > listHeight - scrollZonePx -> {
+                                                val dist = fingerInList - (listHeight - scrollZonePx)
+                                                val proximity = (dist / scrollZonePx).coerceAtMost(1f)
+                                                (proximity * MAX_SCROLL_SPEED).toInt().coerceAtMost(MAX_SCROLL_SPEED)
+                                            }
+                                            else -> 0
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        val sourcePath = draggedFilePath
+                                        val targetFolder = dropTargetPath
+                                        if (sourcePath != null && targetFolder != null && targetFolder != sourcePath) {
+                                            viewModel.moveFileToFolder(sourcePath, targetFolder)
+                                        }
+                                        isDragging = false
+                                        draggedFilePath = null
+                                        dragOffsetY = 0f
+                                        dropTargetPath = null
+                                        scrollSpeed = 0
+                                    },
+                                    onDragCancel = {
+                                        isDragging = false
+                                        draggedFilePath = null
+                                        dragOffsetY = 0f
+                                        dropTargetPath = null
+                                        scrollSpeed = 0
+                                    }
+                                )
+                            }
+                            item { Spacer(Modifier.height(80.dp)) }
+                        }
+
+                        if (isDragging && draggedFile != null) {
+                            DragOverlay(fileName = draggedFile.name, offsetY = dragOffsetY)
+                        }
+                    }
                 }
             }
         }
+    }
+}
 
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+@Composable
+private fun FilesTopAppBar(
+    onSearchClick: () -> Unit,
+    onAccountClick: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Omnifiles",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 20.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
-        } else if (uiState.files.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Filled.Folder,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "This folder is empty",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+        },
+        actions = {
+            IconButton(onClick = onAccountClick) {
+                Icon(
+                    imageVector = Icons.Filled.AccountCircle,
+                    contentDescription = "Account",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
             }
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = lazyListState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(horizontal = 16.dp)
-                        .onGloballyPositioned { coordinates ->
-                            listScreenTop = coordinates.positionInRoot().y
-                            listBottom = listScreenTop + coordinates.size.height
-                        },
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(items = uiState.files, key = { it.path }) { fileInfo ->
-                        FileListItem(
-                            fileInfo = fileInfo,
-                            isSelected = fileInfo.path in uiState.selectedFiles,
-                            isDropTarget = fileInfo.path == dropTargetPath,
-                            selectionMode = uiState.selectionMode,
-                            onSingleClick = {
-                                if (uiState.selectionMode) viewModel.toggleSelection(fileInfo.path)
-                                else if (fileInfo.isDirectory) onNavigateToFolder(fileInfo.path)
-                                else viewModel.openFile(fileInfo)
-                            },
-                            onLongClick = {
-                                if (!uiState.selectionMode) viewModel.enterSelectionMode(fileInfo.path)
-                            },
-                            onOptionsClick = { viewModel.showPropertiesDialog(fileInfo) },
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    )
+}
 
-                            onDragStart = { path, touchY ->
-                                val pos = itemPositions[path]
-                                if (pos != null && !uiState.selectionMode) {
-                                    isDragging = true
-                                    draggedFilePath = path
-                                    touchStartScreenY = pos.first + touchY
-                                    dragOffsetY = 0f
-                                    dropTargetPath = null
-                                }
-                            },
-                            onDrag = { _, dy ->
-                                dragOffsetY += dy
-                                val fingerScreenY = touchStartScreenY + dragOffsetY
-                                val fingerInList = fingerScreenY - listScreenTop
-                                dropTargetPath = null
-
-                                // Find the visible item directly under the finger
-                                for (item in lazyListState.layoutInfo.visibleItemsInfo) {
-                                    if (fingerInList >= item.offset && fingerInList <= item.offset + item.size) {
-                                        val file = uiState.files.getOrNull(item.index)
-                                        if (file?.isDirectory == true && file.path != draggedFilePath) {
-                                            dropTargetPath = file.path
-                                        }
-                                        break
-                                    }
-                                }
-
-                                // Auto-scroll when near edges
-                                val scrollZonePx = with(density) { SCROLL_ZONE_DP.dp.toPx() }
-                                val listHeight = listBottom - listScreenTop
-                                scrollSpeed = when {
-                                    fingerInList < scrollZonePx -> {
-                                        val proximity = 1f - (fingerInList / scrollZonePx)
-                                        -(proximity * MAX_SCROLL_SPEED).toInt().coerceAtMost(MAX_SCROLL_SPEED)
-                                    }
-                                    fingerInList > listHeight - scrollZonePx -> {
-                                        val dist = fingerInList - (listHeight - scrollZonePx)
-                                        val proximity = (dist / scrollZonePx).coerceAtMost(1f)
-                                        (proximity * MAX_SCROLL_SPEED).toInt().coerceAtMost(MAX_SCROLL_SPEED)
-                                    }
-                                    else -> 0
-                                }
-                            },
-                            onDragEnd = {
-                                val sourcePath = draggedFilePath
-                                val targetFolder = dropTargetPath
-                                if (sourcePath != null && targetFolder != null && targetFolder != sourcePath) {
-                                    viewModel.moveFileToFolder(sourcePath, targetFolder)
-                                }
-                                isDragging = false; draggedFilePath = null
-                                dragOffsetY = 0f; dropTargetPath = null; scrollSpeed = 0
-                            },
-                            onDragCancel = {
-                                isDragging = false; draggedFilePath = null
-                                dragOffsetY = 0f; dropTargetPath = null; scrollSpeed = 0
-                            }
-                        )
-                    }
-                    item { Spacer(Modifier.height(80.dp)) }
-                }
-
-                if (isDragging && draggedFile != null) {
-                    DragOverlay(fileName = draggedFile.name, offsetY = dragOffsetY)
-                }
+@Composable
+private fun SelectionTopAppBar(
+    selectedCount: Int,
+    onExit: () -> Unit,
+    onCopy: () -> Unit,
+    onCut: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Text(
+                "$selectedCount selected",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onExit) {
+                Icon(Icons.Filled.Close, "Exit selection")
             }
+        },
+        actions = {
+            IconButton(onClick = onCopy) { Icon(Icons.Filled.ContentCopy, "Copy") }
+            IconButton(onClick = onCut) { Icon(Icons.Filled.ContentCut, "Cut") }
+            IconButton(onClick = onRename) { Icon(Icons.Filled.DriveFileRenameOutline, "Rename") }
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete") }
+            IconButton(onClick = onShare) { Icon(Icons.Filled.Share, "Share") }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    )
+}
+
+@Composable
+private fun BreadcrumbBar(path: String) {
+    val segments = remember(path) {
+        val parts = path.split('/').filter { it.isNotEmpty() }
+        buildList {
+            add("storage" to "storage")
+            parts.drop(1).forEachIndexed { index, part ->
+                add(part to if (index == parts.size - 2) "bold" else "normal")
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        segments.forEachIndexed { index, (label, style) ->
+            if (index == 0) {
+                Icon(
+                    imageVector = Icons.Filled.Storage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = if (style == "bold") FontWeight.Bold else FontWeight.Normal
+                ),
+                color = if (style == "bold") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (index < segments.lastIndex) {
+                Text(
+                    text = "/",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyFolderView() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Filled.Folder,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "This folder is empty",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -588,7 +626,7 @@ private fun NoPermissionScreen(
             )
             Spacer(Modifier.height(32.dp))
             Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.FileCopy, contentDescription = null)
+                Icon(Icons.Filled.OpenInNew, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Grant Permission")
             }

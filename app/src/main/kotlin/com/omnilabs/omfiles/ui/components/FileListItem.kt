@@ -3,6 +3,7 @@ package com.omnilabs.omfiles.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -15,25 +16,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Movie
-
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,34 +42,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.omnilabs.omfiles.core.theme.fileTypeApk
-import com.omnilabs.omfiles.core.theme.fileTypeArchive
-import com.omnilabs.omfiles.core.theme.fileTypeAudio
-import com.omnilabs.omfiles.core.theme.fileTypeDefault
-import com.omnilabs.omfiles.core.theme.fileTypeDocument
-import com.omnilabs.omfiles.core.theme.fileTypeFolder
-import com.omnilabs.omfiles.core.theme.fileTypeImage
-import com.omnilabs.omfiles.core.theme.fileTypeVideo
+import androidx.compose.ui.unit.sp
 import com.omnilabs.omfiles.domain.model.FileInfo
 import com.omnilabs.omfiles.domain.model.FileType
-import com.omnilabs.omfiles.utils.formatFileSize
 import com.omnilabs.omfiles.utils.formatDate
+import com.omnilabs.omfiles.utils.formatFileSize
 
 /**
- * A file list item that supports tap, long-press (selection), and long-press drag-and-drop.
+ * A file list item that matches the premium HTML explorer design.
  *
  * Gesture behavior (when not in selection mode):
- * - Tap → [onSingleClick] (open file / navigate folder / toggle selection)
+ * - Tap → [onSingleClick]
  * - Long-press (hold still) → [onLongClick] (enter selection mode)
- * - Long-press + drag → initiates drag-and-drop via [onDragStart], [onDrag], [onDragEnd]
- *
- * When in selection mode, only tap is active (toggles selection checkbox).
+ * - Long-press + drag → drag-and-drop via [onDragStart], [onDrag], [onDragEnd]
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -96,28 +87,24 @@ fun FileListItem(
     )
 
     val borderColor by animateColorAsState(
-        targetValue = when {
-            isDropTarget && fileInfo.isDirectory -> MaterialTheme.colorScheme.primary
-            else -> Color.Transparent
-        },
+        targetValue = if (isDropTarget && fileInfo.isDirectory) MaterialTheme.colorScheme.primary else Color.Transparent,
         label = "itemBorder"
     )
 
-    // Apply click and drag gesture modifiers conditionally
     val finalModifier = if (selectionMode) {
-        // In selection mode: only tap to toggle selection
         modifier
             .fillMaxWidth()
+            .height(72.dp)
+            .clip(RoundedCornerShape(0.dp))
             .combinedClickable(
-            onClick = onSingleClick,
-            onLongClick = null
-        )
+                onClick = onSingleClick,
+                onLongClick = null
+            )
     } else {
-        // Normal mode: tap, long-press, and drag gestures
-        // combinedClickable handles tap and long-press (no drag movement)
-        // detectDragGesturesAfterLongPress handles long-press + drag
         modifier
             .fillMaxWidth()
+            .height(72.dp)
+            .clip(RoundedCornerShape(0.dp))
             .combinedClickable(
                 onClick = onSingleClick,
                 onLongClick = onLongClick
@@ -137,138 +124,170 @@ fun FileListItem(
             }
     }
 
-    Surface(
-        modifier = finalModifier,
-        shape = RoundedCornerShape(12.dp),
-        color = bgColor,
-        tonalElevation = if (isSelected) 2.dp else 0.dp,
-        border = if (borderColor != Color.Transparent) {
-            androidx.compose.foundation.BorderStroke(2.dp, borderColor)
-        } else null
+    Row(
+        modifier = finalModifier
+            .background(bgColor)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Selection checkbox
-            if (selectionMode) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { onSingleClick() },
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-            }
-
-            // File type icon (with thumbnail for images/videos)
-            FileTypeIcon(fileInfo.fileType, fileInfo.extension, fileInfo.path)
-
+        // Selection checkbox
+        if (selectionMode) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onSingleClick() },
+                modifier = Modifier.size(24.dp)
+            )
             Spacer(Modifier.width(12.dp))
+        }
 
-            // File details
-            Column(modifier = Modifier.weight(1f)) {
+        // File type icon (48x48 area)
+        FileTypeIcon(fileInfo = fileInfo)
+
+        Spacer(Modifier.width(16.dp))
+
+        // File details
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = fileInfo.name,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = fileInfo.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(2.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (fileInfo.isDirectory) {
-                        Text(
-                            text = if (fileInfo.itemCount >= 0) "${fileInfo.itemCount} items" else "Folder",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    text = if (fileInfo.isDirectory) {
+                        if (fileInfo.itemCount >= 0) "${fileInfo.itemCount} items" else "Folder"
                     } else {
-                        Text(
-                            text = formatFileSize(fileInfo.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "\u00b7",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = formatDate(fileInfo.lastModified),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            // Info/properties button
-            if (!selectionMode) {
-                IconButton(
-                    onClick = { onOptionsClick(fileInfo) },
-                    modifier = Modifier.size(20.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Info,
-                        contentDescription = "Properties",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                        formatFileSize(fileInfo.size)
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        letterSpacing = (12.sp.value * 0.02).sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u00b7",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Text(
+                    text = formatDate(fileInfo.lastModified),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        letterSpacing = (12.sp.value * 0.02).sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
-        // Drop target indicator line at the top
-        if (isDropTarget && fileInfo.isDirectory) {
-            Box(
+        // More options
+        if (!selectionMode) {
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = { onOptionsClick(fileInfo) },
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = "More",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+
+    // Drop target top indicator
+    if (isDropTarget && fileInfo.isDirectory) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(MaterialTheme.colorScheme.primary)
+        )
+    }
+}
+
+@Composable
+private fun FileTypeIcon(fileInfo: FileInfo, modifier: Modifier = Modifier) {
+    val (primaryIcon, overlayIcon, iconColor) = iconStyleFor(fileInfo)
+
+    Box(
+        modifier = modifier
+            .size(48.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = primaryIcon,
+            contentDescription = null,
+            tint = iconColor,
+            modifier = Modifier.size(40.dp)
+        )
+
+        // Overlay icon for folders
+        if (overlayIcon != null) {
+            Icon(
+                imageVector = overlayIcon,
+                contentDescription = null,
+                tint = Color.White,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .size(14.dp)
+                    .align(Alignment.Center)
+                    .offset(0.dp, (-2).dp)
             )
         }
     }
 }
 
-@Composable
-fun FileTypeIcon(fileType: FileType, extension: String, path: String = "", modifier: Modifier = Modifier) {
-    if (path.isNotEmpty() && fileType in listOf(FileType.IMAGE, FileType.VIDEO)) {
-        FileThumbnail(
-            filePath = path,
-            fileType = fileType,
-            modifier = modifier
-        )
-    } else {
-        val (icon, color) = when (fileType) {
-            FileType.FOLDER -> Icons.Filled.Folder to fileTypeFolder
-            FileType.IMAGE -> Icons.Filled.Image to fileTypeImage
-            FileType.VIDEO -> Icons.Filled.Videocam to fileTypeVideo
-            FileType.AUDIO -> Icons.Filled.AudioFile to fileTypeAudio
-            FileType.ARCHIVE -> Icons.Outlined.Archive to fileTypeArchive
-            FileType.APK -> Icons.Outlined.Android to fileTypeApk
-            FileType.DOCUMENT -> Icons.Filled.Description to fileTypeDocument
-            FileType.OTHER -> Icons.Filled.Extension to fileTypeDefault
-        }
+private data class FileIconStyle(
+    val primary: ImageVector,
+    val overlay: ImageVector?,
+    val color: Color
+)
 
-        Surface(
-            modifier = modifier.size(44.dp),
-            shape = RoundedCornerShape(10.dp),
-            color = color.copy(alpha = 0.15f)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = fileType.name,
-                tint = color,
-                modifier = Modifier
-                    .padding(8.dp)
-                    .size(28.dp)
-            )
+private fun iconStyleFor(fileInfo: FileInfo): FileIconStyle {
+    return when (fileInfo.fileType) {
+        FileType.FOLDER -> FileIconStyle(
+            primary = Icons.Filled.Folder,
+            overlay = folderOverlayIcon(fileInfo.name),
+            color = Color(0xFFFF9800)
+        )
+        FileType.IMAGE -> FileIconStyle(Icons.Filled.Image, null, Color(0xFF4CAF50))
+        FileType.VIDEO -> FileIconStyle(Icons.Filled.VideoFile, null, Color(0xFFF44336))
+        FileType.AUDIO -> FileIconStyle(Icons.Filled.AudioFile, null, Color(0xFF9C27B0))
+        FileType.ARCHIVE -> FileIconStyle(Icons.Outlined.Inventory2, null, Color(0xFFFF9800))
+        FileType.APK -> FileIconStyle(Icons.Filled.Android, null, Color(0xFF00BCD4))
+        FileType.DOCUMENT -> when (fileInfo.extension.lowercase()) {
+            "pdf" -> FileIconStyle(Icons.Outlined.PictureAsPdf, null, Color(0xFFE53935))
+            else -> FileIconStyle(Icons.Filled.Description, null, MaterialTheme.colorScheme.primary)
         }
+        FileType.OTHER -> FileIconStyle(Icons.Filled.Extension, null, Color(0xFF757575))
+    }
+}
+
+private fun folderOverlayIcon(name: String): ImageVector? {
+    return when (name.lowercase()) {
+        "android" -> Icons.Filled.Android
+        "dcim", "camera" -> Icons.Filled.Image
+        "download", "downloads" -> Icons.Outlined.Archive
+        "music", "audio", "sounds" -> Icons.Filled.MusicNote
+        "movies", "videos" -> Icons.Filled.VideoFile
+        "documents", "docs" -> Icons.Filled.Description
+        else -> null
     }
 }
