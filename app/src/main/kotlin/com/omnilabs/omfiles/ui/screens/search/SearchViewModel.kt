@@ -12,14 +12,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SearchUiState(
     val query: String = "",
     val results: List<FileInfo> = emptyList(),
+    val suggestions: List<FileInfo> = emptyList(),
     val isSearching: Boolean = false,
     val isIndexed: Boolean = false,
+    val isIndexing: Boolean = false,
+    val indexingProgress: Int = 0,
+    val indexingTotal: Int = 0,
     val indexedCount: Int = 0,
     val error: String? = null,
     val extension: String? = null,
@@ -36,12 +41,49 @@ class SearchViewModel @Inject constructor(
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private var searchJob: Job? = null
+    private var suggestJob: Job? = null
+
+    init {
+        // Check if index exists on creation
+        viewModelScope.launch {
+            val status = searchRepository.getIndexStatus()
+            _uiState.value = _uiState.value.copy(
+                isIndexed = status.indexedFilesCount > 0,
+                indexedCount = status.indexedFilesCount
+            )
+
+            // Auto-index on first launch (small delay so UI loads first)
+            if (searchRepository.isIndexNeeded()) {
+                delay(500)
+                indexStorage()
+            }
+        }
+    }
 
     fun onQueryChanged(query: String) {
         _uiState.value = _uiState.value.copy(query = query)
         searchJob?.cancel()
+        suggestJob?.cancel()
+
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                results = emptyList(),
+                suggestions = emptyList(),
+                isSearching = false
+            )
+            return
+        }
+
+        // Show suggestions immediately (prefix match, < 10 ms)
+        suggestJob = viewModelScope.launch {
+            searchRepository.suggest(query).collectLatest { suggestions ->
+                _uiState.value = _uiState.value.copy(suggestions = suggestions)
+            }
+        }
+
+        // Full search with 300ms debounce
         searchJob = viewModelScope.launch {
-            delay(300) // debounce
+            delay(300)
             performSearch()
         }
     }
@@ -66,19 +108,30 @@ class SearchViewModel @Inject constructor(
 
     fun indexStorage() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSearching = true)
-            val result = searchRepository.indexFolder("/storage/emulated/0")
+            _uiState.value = _uiState.value.copy(isIndexing = true, isSearching = true)
+            val result = searchRepository.indexFolder(
+                path = "/storage/emulated/0",
+                onProgress = { indexed, total ->
+                    _uiState.value = _uiState.value.copy(
+                        isIndexing = true,
+                        indexingProgress = indexed,
+                        indexingTotal = total
+                    )
+                }
+            )
             when (result) {
                 is OperationResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isIndexed = true,
                         indexedCount = result.data,
+                        isIndexing = false,
                         isSearching = false
                     )
                 }
                 is OperationResult.Error -> {
                     _uiState.value = _uiState.value.copy(
                         error = result.message,
+                        isIndexing = false,
                         isSearching = false
                     )
                 }
@@ -87,8 +140,20 @@ class SearchViewModel @Inject constructor(
     }
 
     fun clearSearch() {
-        _uiState.value = SearchUiState()
+        _uiState.value = SearchUiState(
+            isIndexed = _uiState.value.isIndexed,
+            indexedCount = _uiState.value.indexedCount
+        )
         searchJob?.cancel()
+        suggestJob?.cancel()
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun dismissSuggestions() {
+        _uiState.value = _uiState.value.copy(suggestions = emptyList())
     }
 
     private suspend fun performSearch() {
@@ -107,7 +172,7 @@ class SearchViewModel @Inject constructor(
             maxSize = state.maxSize
         )
 
-        searchRepository.search(filters).collect { results ->
+        searchRepository.search(filters).collectLatest { results ->
             _uiState.value = _uiState.value.copy(
                 results = results,
                 isSearching = false

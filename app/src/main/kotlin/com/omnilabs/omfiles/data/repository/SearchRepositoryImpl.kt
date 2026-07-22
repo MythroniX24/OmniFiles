@@ -19,8 +19,29 @@ class SearchRepositoryImpl @Inject constructor(
         return searchEngine.search(filters)
     }
 
-    override suspend fun indexFolder(path: String): OperationResult<Int> {
-        return searchEngine.indexFolder(path)
+    override fun suggest(query: String): Flow<List<FileInfo>> {
+        return searchEngine.suggest(query)
+    }
+
+    override suspend fun indexFolder(
+        path: String,
+        onProgress: ((indexed: Int, total: Int) -> Unit)?
+    ): OperationResult<Int> {
+        return searchEngine.indexFolder(path, onProgress = onProgress)
+    }
+
+    override suspend fun indexFolderIncremental(path: String): OperationResult<Int> {
+        return searchEngine.indexFolderIncremental(path)
+    }
+
+    override suspend fun autoIndexIfNeeded(
+        onProgress: ((indexed: Int, total: Int) -> Unit)?
+    ): OperationResult<Int> {
+        return searchEngine.autoIndexIfNeeded(onProgress)
+    }
+
+    override suspend fun isIndexNeeded(): Boolean {
+        return searchEngine.isIndexNeeded()
     }
 
     override suspend fun clearIndex(): OperationResult<Unit> {

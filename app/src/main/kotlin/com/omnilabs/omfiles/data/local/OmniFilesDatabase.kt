@@ -10,15 +10,17 @@ import com.omnilabs.omfiles.data.local.entity.FavoriteEntity
 import com.omnilabs.omfiles.data.local.entity.RecentFileEntity
 import com.omnilabs.omfiles.data.local.entity.RecycleBinEntity
 import com.omnilabs.omfiles.data.local.entity.SearchIndexEntity
+import com.omnilabs.omfiles.data.local.entity.SearchIndexFts
 
 @Database(
     entities = [
         FavoriteEntity::class,
         RecentFileEntity::class,
         SearchIndexEntity::class,
+        SearchIndexFts::class,
         RecycleBinEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class OmniFilesDatabase : RoomDatabase() {
