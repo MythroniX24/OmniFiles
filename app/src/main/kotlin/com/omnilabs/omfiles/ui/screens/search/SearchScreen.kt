@@ -378,7 +378,7 @@ private fun SuggestionItem(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = fileInfo.parentPath,
+                text = fileInfo.parentPath ?: "",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 maxLines = 1,
