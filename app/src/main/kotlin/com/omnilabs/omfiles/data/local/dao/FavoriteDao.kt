@@ -25,6 +25,12 @@ interface FavoriteDao {
     @Query("SELECT COUNT(*) FROM favorites WHERE path = :path")
     suspend fun isFavorite(path: String): Int
 
+    @Query("SELECT path FROM favorites")
+    suspend fun getAllFavoritePaths(): List<String>
+
+    @Query("SELECT path FROM favorites WHERE path IN (:paths)")
+    suspend fun getFavoritePathsIn(paths: Collection<String>): List<String>
+
     @Query("DELETE FROM favorites")
     suspend fun clearAll()
 }

@@ -9,4 +9,10 @@ interface FavoriteRepository {
     suspend fun addFavorite(path: String): OperationResult<Unit>
     suspend fun removeFavorite(path: String): OperationResult<Unit>
     suspend fun isFavorite(path: String): Boolean
+
+    /**
+     * Batch check: returns the subset of [paths] that are favorites.
+     * Much faster than calling isFavorite() for each path individually.
+     */
+    suspend fun getFavoritePathsIn(paths: Collection<String>): Set<String>
 }

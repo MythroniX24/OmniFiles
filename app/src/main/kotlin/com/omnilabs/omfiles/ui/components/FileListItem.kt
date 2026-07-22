@@ -199,7 +199,7 @@ fun FileListItem(
                 ) {
                     if (fileInfo.isDirectory) {
                         Text(
-                            text = "${java.io.File(fileInfo.path).listFiles()?.size ?: 0} items",
+                            text = if (fileInfo.itemCount >= 0) "${fileInfo.itemCount} items" else "Folder",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

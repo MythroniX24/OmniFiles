@@ -5,13 +5,16 @@ import java.io.File
 data class FileInfo(
     val path: String,
     val name: String,
+    val nameLowercase: String = name.lowercase(), // pre-computed for fast sorting
     val extension: String,
+    val extensionLowercase: String = extension.lowercase(), // pre-computed for fast sorting
     val isDirectory: Boolean,
     val isHidden: Boolean,
     val size: Long,
     val lastModified: Long,
     val parentPath: String?,
-    val isSymbolicLink: Boolean
+    val isSymbolicLink: Boolean,
+    val itemCount: Int = -1 // cached item count for directories (-1 = unknown)
 ) {
     val isFile: Boolean get() = !isDirectory
 
@@ -50,14 +53,101 @@ data class FileInfo(
             return FileInfo(
                 path = file.absolutePath,
                 name = name,
+                nameLowercase = name.lowercase(),
                 extension = if (dotIndex > 0) name.substring(dotIndex + 1) else "",
+                extensionLowercase = if (dotIndex > 0) name.substring(dotIndex + 1).lowercase() else "",
                 isDirectory = file.isDirectory,
                 isHidden = file.isHidden,
                 size = if (file.isFile) file.length() else 0L,
                 lastModified = file.lastModified(),
                 parentPath = file.parent,
-                isSymbolicLink = try { java.nio.file.Files.isSymbolicLink(file.toPath()) } catch (e: Exception) { false }
+                isSymbolicLink = try { java.nio.file.Files.isSymbolicLink(file.toPath()) } catch (e: Exception) { false },
+                itemCount = if (file.isDirectory) file.listFiles()?.size ?: 0 else -1
             )
+        }
+
+        /**
+         * Fast factory using java.nio.file.Files.readAttributes to get all
+         * file metadata in a single syscall per file (instead of 5+ syscalls
+         * with the File-based approach).
+         */
+        fun fromNioPath(filePath: String, itemCount: Int = -1): FileInfo? {
+            return try {
+                val pathObj = java.nio.file.Paths.get(filePath)
+                val attrs = java.nio.file.Files.readAttributes(
+                    pathObj, java.nio.file.attribute.BasicFileAttributes::class.java
+                )
+                val name = pathObj.fileName.toString()
+                val dotIndex = name.lastIndexOf('.')
+                FileInfo(
+                    path = filePath,
+                    name = name,
+                    nameLowercase = name.lowercase(),
+                    extension = if (dotIndex > 0) name.substring(dotIndex + 1) else "",
+                    extensionLowercase = if (dotIndex > 0) name.substring(dotIndex + 1).lowercase() else "",
+                    isDirectory = attrs.isDirectory,
+                    isHidden = name.startsWith('.'),
+                    size = if (attrs.isRegularFile) attrs.size() else 0L,
+                    lastModified = attrs.lastModifiedTime().toMillis(),
+                    parentPath = pathObj.parent.toString(),
+                    isSymbolicLink = attrs.isSymbolicLink,
+                    itemCount = itemCount
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        /**
+         * Batch read attributes for all files in a directory using DirectoryStream.
+         * Uses NIO for optimal performance: avoids allocating File[] array,
+         * uses single syscall per file via readAttributes.
+         */
+        fun listDirectoryFast(
+            dirPath: String,
+            showHidden: Boolean = false,
+            includeCounts: Boolean = true
+        ): List<FileInfo> {
+            val results = mutableListOf<FileInfo>()
+            val dir = java.io.File(dirPath)
+            if (!dir.exists() || !dir.isDirectory) return emptyList()
+
+            try {
+                java.nio.file.Files.newDirectoryStream(dir.toPath()).use { stream ->
+                    for (path in stream) {
+                        if (!showHidden && path.fileName.toString().startsWith('.')) continue
+                        val filePath = path.toString()
+                        val attrs = java.nio.file.Files.readAttributes(
+                            path, java.nio.file.attribute.BasicFileAttributes::class.java
+                        )
+                        val name = path.fileName.toString()
+                        val dotIndex = name.lastIndexOf('.')
+
+                        // Count directory items in batch to reduce overhead
+                        val count = if (includeCounts && attrs.isDirectory) {
+                            try { java.nio.file.Files.newDirectoryStream(path).use { s -> s.count() } }
+                            catch (_: Exception) { 0 }
+                        } else -1
+
+                        results.add(FileInfo(
+                            path = filePath,
+                            name = name,
+                            nameLowercase = name.lowercase(),
+                            extension = if (dotIndex > 0) name.substring(dotIndex + 1) else "",
+                            extensionLowercase = if (dotIndex > 0) name.substring(dotIndex + 1).lowercase() else "",
+                            isDirectory = attrs.isDirectory,
+                            isHidden = name.startsWith('.'),
+                            size = if (attrs.isRegularFile) attrs.size() else 0L,
+                            lastModified = attrs.lastModifiedTime().toMillis(),
+                            parentPath = dirPath,
+                            isSymbolicLink = attrs.isSymbolicLink,
+                            itemCount = count
+                        ))
+                    }
+                }
+            } catch (_: Exception) { }
+
+            return results
         }
     }
 }

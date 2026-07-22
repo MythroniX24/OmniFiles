@@ -68,4 +68,9 @@ class FavoriteRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             favoriteDao.isFavorite(path) > 0
         }
+
+    override suspend fun getFavoritePathsIn(paths: Collection<String>): Set<String> =
+        withContext(Dispatchers.IO) {
+            favoriteDao.getFavoritePathsIn(paths).toSet()
+        }
 }

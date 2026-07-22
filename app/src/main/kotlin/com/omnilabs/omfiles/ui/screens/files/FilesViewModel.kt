@@ -161,13 +161,14 @@ class FilesViewModel @Inject constructor(
                 val fileList = fileRepository.getFiles(path, sortOptions, _showHidden.value).first()
                 _files.value = fileList
 
-                val favSet = mutableSetOf<String>()
-                for (file in fileList) {
-                    if (favoriteRepository.isFavorite(file.path)) {
-                        favSet.add(file.path)
-                    }
+                // Batch favorite check: single DB query instead of N queries
+                if (fileList.isNotEmpty()) {
+                    val paths = fileList.map { it.path }
+                    _favorites.value = favoriteRepository.getFavoritePathsIn(paths)
+                } else {
+                    _favorites.value = emptySet()
                 }
-                _favorites.value = favSet
+
                 recentFilesRepository.addRecentFile(path)
                 _isLoading.value = false
             } catch (e: Exception) {

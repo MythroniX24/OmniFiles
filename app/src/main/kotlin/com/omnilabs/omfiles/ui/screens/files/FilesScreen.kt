@@ -692,7 +692,7 @@ private fun PropertiesDialog(
                     PropRow("Size", formatFileSize(fileInfo.size))
                     PropRow("Extension", fileInfo.extension.uppercase())
                 } else {
-                    PropRow("Contents", "${java.io.File(fileInfo.path).listFiles()?.size ?: 0} items")
+                    PropRow("Contents", if (fileInfo.itemCount >= 0) "${fileInfo.itemCount} items" else "Folder")
                 }
                 PropRow("Modified", formatDate(fileInfo.lastModified))
                 PropRow("Hidden", if (fileInfo.isHidden) "Yes" else "No")
