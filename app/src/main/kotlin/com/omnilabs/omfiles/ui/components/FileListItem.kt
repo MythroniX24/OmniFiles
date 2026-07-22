@@ -80,7 +80,6 @@ fun FileListItem(
     onSingleClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onOptionsClick: (FileInfo) -> Unit = {},
-    onItemPositioned: (String, Float, Float, Float) -> Unit = { _, _, _, _ -> },
     onDragStart: (String, Float) -> Unit = { _, _ -> },
     onDrag: (Float, Float) -> Unit = { _, _ -> },
     onDragEnd: () -> Unit = {},
@@ -104,24 +103,12 @@ fun FileListItem(
         label = "itemBorder"
     )
 
-    // Build the base modifier with position tracking and click handling
-    val baseModifier = modifier
-        .fillMaxWidth()
-        .onGloballyPositioned { coordinates ->
-            val pos = coordinates.positionInRoot()
-            val size = coordinates.size
-            onItemPositioned(
-                fileInfo.path,
-                pos.x,
-                pos.y,
-                pos.y + size.height.toFloat()
-            )
-        }
-
     // Apply click and drag gesture modifiers conditionally
     val finalModifier = if (selectionMode) {
         // In selection mode: only tap to toggle selection
-        baseModifier.combinedClickable(
+        modifier
+            .fillMaxWidth()
+            .combinedClickable(
             onClick = onSingleClick,
             onLongClick = null
         )
@@ -129,7 +116,8 @@ fun FileListItem(
         // Normal mode: tap, long-press, and drag gestures
         // combinedClickable handles tap and long-press (no drag movement)
         // detectDragGesturesAfterLongPress handles long-press + drag
-        baseModifier
+        modifier
+            .fillMaxWidth()
             .combinedClickable(
                 onClick = onSingleClick,
                 onLongClick = onLongClick

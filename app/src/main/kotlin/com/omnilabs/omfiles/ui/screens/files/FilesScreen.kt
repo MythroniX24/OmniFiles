@@ -117,11 +117,11 @@ fun FilesScreen(
     var draggedFilePath by remember { mutableStateOf<String?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var dropTargetPath by remember { mutableStateOf<String?>(null) }
-    val itemPositions = remember { mutableMapOf<String, Pair<Float, Float>>() }
+
     var touchStartScreenY by remember { mutableFloatStateOf(0f) }
 
     val lazyListState = rememberLazyListState()
-    var listTop by remember { mutableFloatStateOf(0f) }
+    var listScreenTop by remember { mutableFloatStateOf(0f) }
     var listBottom by remember { mutableFloatStateOf(0f) }
     var scrollSpeed by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -473,7 +473,10 @@ fun FilesScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                         .padding(horizontal = 16.dp)
-                        .onSizeChanged { size -> listBottom = size.height.toFloat() },
+                        .onGloballyPositioned { coordinates ->
+                            listScreenTop = coordinates.positionInRoot().y
+                            listBottom = listScreenTop + coordinates.size.height
+                        },
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(items = uiState.files, key = { it.path }) { fileInfo ->
@@ -491,9 +494,7 @@ fun FilesScreen(
                                 if (!uiState.selectionMode) viewModel.enterSelectionMode(fileInfo.path)
                             },
                             onOptionsClick = { viewModel.showPropertiesDialog(fileInfo) },
-                            onItemPositioned = { path, _, top, bottom ->
-                                itemPositions[path] = Pair(top, bottom)
-                            },
+
                             onDragStart = { path, touchY ->
                                 val pos = itemPositions[path]
                                 if (pos != null && !uiState.selectionMode) {
@@ -506,19 +507,24 @@ fun FilesScreen(
                             },
                             onDrag = { _, dy ->
                                 dragOffsetY += dy
-                                val fingerY = touchStartScreenY + dragOffsetY
+                                val fingerScreenY = touchStartScreenY + dragOffsetY
+                                val fingerInList = fingerScreenY - listScreenTop
                                 dropTargetPath = null
-                                for (file in uiState.files) {
-                                    if (!file.isDirectory) continue
-                                    val positions = itemPositions[file.path] ?: continue
-                                    if (fingerY in positions.first..positions.second) {
-                                        if (file.path != draggedFilePath) dropTargetPath = file.path
+
+                                // Find the visible item directly under the finger
+                                for (item in lazyListState.layoutInfo.visibleItemsInfo) {
+                                    if (fingerInList >= item.offset && fingerInList <= item.offset + item.size) {
+                                        val file = uiState.files.getOrNull(item.index)
+                                        if (file?.isDirectory == true && file.path != draggedFilePath) {
+                                            dropTargetPath = file.path
+                                        }
                                         break
                                     }
                                 }
+
+                                // Auto-scroll when near edges
                                 val scrollZonePx = with(density) { SCROLL_ZONE_DP.dp.toPx() }
-                                val listHeight = listBottom - listTop
-                                val fingerInList = fingerY - listTop
+                                val listHeight = listBottom - listScreenTop
                                 scrollSpeed = when {
                                     fingerInList < scrollZonePx -> {
                                         val proximity = 1f - (fingerInList / scrollZonePx)
