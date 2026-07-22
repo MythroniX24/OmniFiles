@@ -329,25 +329,21 @@ private fun QuickAccessGrid(onItemClick: (String) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        val rows = items.chunked(4)
-        for (rowIndex in rows.indices) {
-            val rowItems = rows[rowIndex]
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                for (index in 0 until 4) {
-                    if (index < rowItems.size) {
-                        QuickAccessTile(
-                            item = rowItems[index],
-                            onClick = { onItemClick(rowItems[index].path) }
-                        )
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
+        QuickAccessRow(items.subList(0, 4), onItemClick)
+        QuickAccessRow(items.subList(4, 8), onItemClick)
+    }
+}
+
+@Composable
+private fun QuickAccessRow(rowItems: List<QuickAccessItem>, onItemClick: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        QuickAccessTile(item = rowItems[0], onClick = { onItemClick(rowItems[0].path) })
+        QuickAccessTile(item = rowItems[1], onClick = { onItemClick(rowItems[1].path) })
+        QuickAccessTile(item = rowItems[2], onClick = { onItemClick(rowItems[2].path) })
+        QuickAccessTile(item = rowItems[3], onClick = { onItemClick(rowItems[3].path) })
     }
 }
 
