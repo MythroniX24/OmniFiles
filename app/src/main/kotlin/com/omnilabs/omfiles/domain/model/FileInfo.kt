@@ -1,5 +1,8 @@
 package com.omnilabs.omfiles.domain.model
 
+import android.content.Context
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import java.io.File
 
 data class FileInfo(
@@ -47,6 +50,34 @@ data class FileInfo(
         }
 
     companion object {
+
+        fun fromDocumentFile(doc: DocumentFile): FileInfo {
+            val name = doc.name ?: ""
+            val dotIndex = name.lastIndexOf('.')
+            val uriString = doc.uri.toString()
+            return FileInfo(
+                path = uriString,
+                name = name,
+                nameLowercase = name.lowercase(),
+                extension = if (dotIndex > 0) name.substring(dotIndex + 1) else "",
+                extensionLowercase = if (dotIndex > 0) name.substring(dotIndex + 1).lowercase() else "",
+                isDirectory = doc.isDirectory,
+                isHidden = name.startsWith('.'),
+                size = doc.length(),
+                lastModified = doc.lastModified(),
+                parentPath = doc.parentFile?.uri?.toString(),
+                isSymbolicLink = false,
+                itemCount = if (doc.isDirectory) doc.listFiles().size else -1
+            )
+        }
+
+        fun fromUri(context: Context, uri: Uri): FileInfo? {
+            return try {
+                val doc = DocumentFile.fromSingleUri(context, uri)
+                doc?.let { fromDocumentFile(it) }
+            } catch (_: Exception) { null }
+        }
+
         fun fromFile(file: File): FileInfo {
             val name = file.name
             val dotIndex = name.lastIndexOf('.')

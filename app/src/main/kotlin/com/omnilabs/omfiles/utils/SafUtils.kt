@@ -134,6 +134,23 @@ object SafUtils {
     }
 
     /**
+     * Finds a persisted SAF tree URI whose path is a prefix of the given file path.
+     * Useful for resolving removable storage paths that require SAF permissions.
+     */
+    fun findPersistedUriForPath(context: Context, path: String): Uri? {
+        try {
+            context.contentResolver.persistedUriPermissions.forEach { permission ->
+                val treeUri = permission.uri
+                val treePath = treeUri.path ?: return@forEach
+                if (path.startsWith(treePath)) {
+                    return treeUri
+                }
+            }
+        } catch (_: Exception) { }
+        return null
+    }
+
+    /**
      * List all available storage volumes.
      * Uses StorageManager on Android 11+ for proper volume detection.
      */
