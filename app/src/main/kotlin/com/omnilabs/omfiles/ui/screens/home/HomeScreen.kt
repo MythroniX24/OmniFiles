@@ -220,6 +220,19 @@ private fun StorageCard(storage: StorageInfo, onClick: () -> Unit) {
         animationSpec = tween(800),
         label = "storageProgress"
     )
+    // Capture colors OUTSIDE Canvas (which is DrawScope, not Composable)
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val progressColor = when {
+        storage.usedPercentage > 90f -> MaterialTheme.colorScheme.error
+        storage.usedPercentage > 70f -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val iconTint = when (storage.type) {
+        StorageType.INTERNAL -> MaterialTheme.colorScheme.primary
+        StorageType.SD_CARD -> MaterialTheme.colorScheme.tertiary
+        StorageType.USB_OTG -> MaterialTheme.colorScheme.secondary
+    }
+    val progressFloat = animatedProgress
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
@@ -240,9 +253,8 @@ private fun StorageCard(storage: StorageInfo, onClick: () -> Unit) {
                     val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
                     val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
 
-                    // Background arc
                     drawArc(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = trackColor,
                         startAngle = -90f,
                         sweepAngle = 360f,
                         useCenter = false,
@@ -250,15 +262,10 @@ private fun StorageCard(storage: StorageInfo, onClick: () -> Unit) {
                         size = arcSize,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
-                    // Progress arc
                     drawArc(
-                        color = when {
-                            storage.usedPercentage > 90f -> MaterialTheme.colorScheme.error
-                            storage.usedPercentage > 70f -> MaterialTheme.colorScheme.tertiary
-                            else -> MaterialTheme.colorScheme.primary
-                        },
+                        color = progressColor,
                         startAngle = -90f,
-                        sweepAngle = 360f * animatedProgress,
+                        sweepAngle = 360f * progressFloat,
                         useCenter = false,
                         topLeft = topLeft,
                         size = arcSize,
@@ -273,11 +280,7 @@ private fun StorageCard(storage: StorageInfo, onClick: () -> Unit) {
                         StorageType.USB_OTG -> Icons.Filled.Usb
                     },
                     contentDescription = null,
-                    tint = when (storage.type) {
-                        StorageType.INTERNAL -> MaterialTheme.colorScheme.primary
-                        StorageType.SD_CARD -> MaterialTheme.colorScheme.tertiary
-                        StorageType.USB_OTG -> MaterialTheme.colorScheme.secondary
-                    },
+                    tint = iconTint,
                     modifier = Modifier.size(24.dp)
                 )
             }
