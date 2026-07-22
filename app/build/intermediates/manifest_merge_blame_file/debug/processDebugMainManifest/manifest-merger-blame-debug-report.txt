@@ -6,7 +6,7 @@
 6
 7    <uses-sdk
 8        android:minSdkVersion="26"
-9        android:targetSdkVersion="36" />
+9        android:targetSdkVersion="35" />
 10
 11    <!-- Storage Permissions -->
 12    <uses-permission

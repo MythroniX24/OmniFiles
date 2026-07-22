@@ -5,6 +5,7 @@ import com.omnilabs.omfiles.data.repository.FavoriteRepositoryImpl
 import com.omnilabs.omfiles.data.repository.FileRepositoryImpl
 import com.omnilabs.omfiles.data.repository.RecentFilesRepositoryImpl
 import com.omnilabs.omfiles.data.repository.SearchRepositoryImpl
+import com.omnilabs.omfiles.data.repository.RecycleBinRepositoryImpl
 import com.omnilabs.omfiles.data.repository.SettingsRepositoryImpl
 import com.omnilabs.omfiles.domain.repository.ArchiveRepository
 import com.omnilabs.omfiles.domain.repository.FavoriteRepository
