@@ -36,7 +36,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-v2-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
@@ -45,16 +45,16 @@ jobs:
         with:
           path: |
             ~/.android/build-cache
-          key: ${{ runner.os }}-android-build-${{ hashFiles('**/*.gradle*') }}
+          key: ${{ runner.os }}-android-build-v2-${{ hashFiles('**/*.gradle*') }}
           restore-keys: |
             ${{ runner.os }}-android-build-
 
       - name: Run lint checks
-        run: ./gradlew lint --no-daemon
+        run: ./gradlew clean lint --no-daemon
         continue-on-error: true
 
       - name: ➡️ Run unit tests (must pass before APK build)
-        run: ./gradlew test --no-daemon
+        run: ./gradlew clean test --no-daemon
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
