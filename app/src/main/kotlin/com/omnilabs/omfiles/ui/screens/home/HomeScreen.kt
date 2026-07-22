@@ -1,8 +1,11 @@
 package com.omnilabs.omfiles.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,22 +29,20 @@ import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.SdCard
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -53,24 +54,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.omnilabs.omfiles.domain.model.FileInfo
 import com.omnilabs.omfiles.domain.model.StorageInfo
 import com.omnilabs.omfiles.domain.model.StorageType
-import com.omnilabs.omfiles.ui.components.FileListItem
-import com.omnilabs.omfiles.utils.formatFileSize
-import com.omnilabs.omfiles.utils.formatPercentage
 import com.omnilabs.omfiles.utils.formatStorageSize
 
 data class QuickAccessItem(
     val label: String,
     val icon: ImageVector,
-    val color: androidx.compose.ui.graphics.Color,
+    val color: Color,
     val path: String
 )
 
@@ -83,7 +86,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val error by viewModel.error.collectAsState()
 
     Scaffold(
         topBar = {
@@ -96,69 +98,57 @@ fun HomeScreen(
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         }
     ) { paddingValues ->
         if (uiState.isLoading) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
+            ) { CircularProgressIndicator() }
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Storage cards
+                // ── Storage Section ──
                 item {
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         "Storage",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
                 items(uiState.storageVolumes) { storage ->
-                    StorageCard(
-                        storage = storage,
-                        onClick = { onNavigateToFiles(storage.path) }
-                    )
+                    StorageCard(storage = storage, onClick = { onNavigateToFiles(storage.path) })
                 }
 
-                // Quick access grid
+                // ── Quick Access Section ──
                 item {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         "Quick Access",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
                 item {
-                    QuickAccessGrid(
-                        onItemClick = onNavigateToFiles
-                    )
+                    QuickAccessGrid(onItemClick = onNavigateToFiles)
                 }
 
-                // Favorites
+                // ── Favorites Section ──
                 if (uiState.favorites.isNotEmpty()) {
                     item {
-                        Spacer(Modifier.height(4.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.Outlined.Star,
                                 contentDescription = null,
@@ -175,23 +165,16 @@ fun HomeScreen(
                     }
 
                     items(uiState.favorites.take(5)) { file ->
-                        FileListItem(
-                            fileInfo = file,
-                            isFavorite = true,
-                            onSingleClick = {
-                                if (file.isDirectory) onNavigateToFiles(file.path)
-                            }
-                        )
+                        FavoriteRow(file = file, onClick = {
+                            if (file.isDirectory) onNavigateToFiles(file.path)
+                        })
                     }
                 }
 
-                // Recent files
+                // ── Recent Files Section ──
                 item {
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Outlined.History,
                             contentDescription = null,
@@ -210,7 +193,7 @@ fun HomeScreen(
                 if (uiState.recentFiles.isEmpty()) {
                     item {
                         Text(
-                            "No recent files",
+                            "No recent files yet",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 8.dp)
@@ -218,12 +201,9 @@ fun HomeScreen(
                     }
                 } else {
                     items(uiState.recentFiles.take(10)) { file ->
-                        FileListItem(
-                            fileInfo = file,
-                            onSingleClick = {
-                                if (file.isDirectory) onNavigateToFiles(file.path)
-                            }
-                        )
+                        RecentRow(file = file, onClick = {
+                            if (file.isDirectory) onNavigateToFiles(file.path)
+                        })
                     }
                 }
 
@@ -234,39 +214,58 @@ fun HomeScreen(
 }
 
 @Composable
-private fun StorageCard(
-    storage: StorageInfo,
-    onClick: () -> Unit
-) {
+private fun StorageCard(storage: StorageInfo, onClick: () -> Unit) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = storage.usedPercentage / 100f,
+        animationSpec = tween(800),
+        label = "storageProgress"
+    )
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon
+            // Storage ring
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        when (storage.type) {
-                            StorageType.INTERNAL -> MaterialTheme.colorScheme.primary
-                            StorageType.SD_CARD -> MaterialTheme.colorScheme.tertiary
-                            StorageType.USB_OTG -> MaterialTheme.colorScheme.secondary
-                        }.copy(alpha = 0.15f)
-                    ),
+                modifier = Modifier.size(64.dp),
                 contentAlignment = Alignment.Center
             ) {
+                Canvas(modifier = Modifier.size(64.dp)) {
+                    val strokeWidth = 6.dp.toPx()
+                    val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+                    val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+
+                    // Background arc
+                    drawArc(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+                    // Progress arc
+                    drawArc(
+                        color = when {
+                            storage.usedPercentage > 90f -> MaterialTheme.colorScheme.error
+                            storage.usedPercentage > 70f -> MaterialTheme.colorScheme.tertiary
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        startAngle = -90f,
+                        sweepAngle = 360f * animatedProgress,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+                }
+                // Icon in center
                 Icon(
                     imageVector = when (storage.type) {
                         StorageType.INTERNAL -> Icons.Filled.Storage
@@ -291,28 +290,22 @@ private fun StorageCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.height(4.dp))
-                LinearProgressIndicator(
-                    progress = { storage.usedPercentage / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = when {
-                        storage.usedPercentage > 90f -> MaterialTheme.colorScheme.error
-                        storage.usedPercentage > 70f -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.primary
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = when (storage.type) {
+                        StorageType.INTERNAL -> "Phone storage"
+                        StorageType.SD_CARD -> "External SD card"
+                        StorageType.USB_OTG -> "USB OTG drive"
                     },
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = StrokeCap.Round,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "${formatStorageSize(storage.usedSpace)} used • ${formatStorageSize(storage.freeSpace)} free (${formatPercentage(storage.usedPercentage)}%)",
+                    text = "${formatStorageSize(storage.freeSpace)} free of ${formatStorageSize(storage.totalSpace)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -320,35 +313,33 @@ private fun StorageCard(
 }
 
 @Composable
-private fun QuickAccessGrid(
-    onItemClick: (String) -> Unit
-) {
+private fun QuickAccessGrid(onItemClick: (String) -> Unit) {
     val items = listOf(
-        QuickAccessItem("Downloads", Icons.Outlined.Download, MaterialTheme.colorScheme.primary, "/storage/emulated/0/Download"),
-        QuickAccessItem("Documents", Icons.Filled.Description, MaterialTheme.colorScheme.secondary, "/storage/emulated/0/Documents"),
-        QuickAccessItem("Images", Icons.Filled.Image, MaterialTheme.colorScheme.tertiary, "/storage/emulated/0/DCIM"),
-        QuickAccessItem("Videos", Icons.Filled.Videocam, MaterialTheme.colorScheme.error, "/storage/emulated/0/Movies"),
-        QuickAccessItem("Audio", Icons.Filled.AudioFile, MaterialTheme.colorScheme.tertiary, "/storage/emulated/0/Music"),
-        QuickAccessItem("APKs", Icons.Outlined.Android, MaterialTheme.colorScheme.primary, "/storage/emulated/0/Download"),
-        QuickAccessItem("Archives", Icons.Outlined.Archive, MaterialTheme.colorScheme.secondary, "/storage/emulated/0/Download"),
-        QuickAccessItem("Internal", Icons.Filled.Folder, MaterialTheme.colorScheme.tertiary, "/storage/emulated/0"),
+        QuickAccessItem("Downloads", Icons.Outlined.Download, Color(0xFF4A90D9), "/storage/emulated/0/Download"),
+        QuickAccessItem("Documents", Icons.Filled.Description, Color(0xFFE67E22), "/storage/emulated/0/Documents"),
+        QuickAccessItem("Images", Icons.Filled.Image, Color(0xFF2ECC71), "/storage/emulated/0/DCIM"),
+        QuickAccessItem("Videos", Icons.Filled.Videocam, Color(0xFFE74C3C), "/storage/emulated/0/Movies"),
+        QuickAccessItem("Audio", Icons.Filled.AudioFile, Color(0xFF9B59B6), "/storage/emulated/0/Music"),
+        QuickAccessItem("APKs", Icons.Outlined.Android, Color(0xFF1ABC9C), "/storage/emulated/0/Download"),
+        QuickAccessItem("Archives", Icons.Outlined.Archive, Color(0xFFF39C12), "/storage/emulated/0/Download"),
+        QuickAccessItem("Internal", Icons.Filled.Folder, Color(0xFF3498DB), "/storage/emulated/0")
     )
 
-    // Using Column/Row instead of LazyVerticalGrid to avoid infinite height constraint crash
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items.chunked(4).forEach { rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 rowItems.forEach { item ->
-                    QuickAccessTile(
-                        item = item,
-                        onClick = { onItemClick(item.path) }
-                    )
+                    QuickAccessTile(item = item, onClick = { onItemClick(item.path) })
+                }
+                // Fill remaining space with spacers if less than 4 items
+                repeat(4 - rowItems.size) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -356,21 +347,19 @@ private fun QuickAccessGrid(
 }
 
 @Composable
-private fun QuickAccessTile(
-    item: QuickAccessItem,
-    onClick: () -> Unit
-) {
+private fun QuickAccessTile(item: QuickAccessItem, onClick: () -> Unit) {
     Column(
         modifier = Modifier
-            .padding(4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .width(72.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
+                .size(52.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(item.color.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
@@ -378,16 +367,87 @@ private fun QuickAccessTile(
                 imageVector = item.icon,
                 contentDescription = item.label,
                 tint = item.color,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = item.label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 11.sp
         )
+    }
+}
+
+@Composable
+private fun FavoriteRow(file: FileInfo, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.Star,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                imageVector = if (file.isDirectory) Icons.Filled.Folder else Icons.Filled.Description,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = file.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentRow(file: FileInfo, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.History,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                imageVector = if (file.isDirectory) Icons.Filled.Folder else Icons.Filled.Description,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = file.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

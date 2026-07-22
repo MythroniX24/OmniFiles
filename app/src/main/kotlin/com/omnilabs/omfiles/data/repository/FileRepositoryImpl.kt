@@ -50,8 +50,7 @@ class FileRepositoryImpl @Inject constructor() : FileRepository {
 
     companion object {
         private const val MAX_CACHE_ENTRIES = 32          // Max cached directories
-        private const val CACHE_TTL_MS = 5_000L            // 5 seconds cache TTL
-        private const val DIRECTORY_STREAM_THRESHOLD = 500 // Use NIO DirectoryStream for dirs > this size
+        private const val CACHE_TTL_MS = 30_000L           // 30 seconds cache TTL
 
         private fun cacheKey(path: String, opts: FileSortOptions, showHidden: Boolean): String =
             "$path|$showHidden|${opts.mode}|${opts.order}|${opts.foldersFirst}"
@@ -90,52 +89,15 @@ class FileRepositoryImpl @Inject constructor() : FileRepository {
     }.flowOn(Dispatchers.IO)
 
     /**
-     * Fast directory listing using NIO DirectoryStream for large directories
-     * (avoids allocating huge File[] arrays) and Files.readAttributes for
-     * single-syscall metadata retrieval.
-     *
-     * For small directories (< threshold), falls back to the standard
-     * File.listFiles() since it has less overhead.
+     * Fast directory listing using NIO DirectoryStream.
+     * Single-pass approach: creates FileInfo objects directly from DirectoryStream
+     * without any pre-counting overhead.
      */
     private fun listDirectoryFast(dir: File, showHidden: Boolean): List<FileInfo> {
-        // Quick size check: count entries to decide strategy
-        val estimatedSize = try {
-            var count = 0
-            Files.newDirectoryStream(dir.toPath()).use { stream ->
-                val iter = stream.iterator()
-                while (iter.hasNext() && count < DIRECTORY_STREAM_THRESHOLD) {
-                    iter.next()
-                    count++
-                }
-            }
-            count
-        } catch (_: Exception) { 0 }
-
-        // For small directories, use the simpler File-based approach (less overhead)
-        if (estimatedSize < DIRECTORY_STREAM_THRESHOLD) {
-            return listDirectorySimple(dir, showHidden)
-        }
-
-        // For large directories, use NIO DirectoryStream + readAttributes
         return listDirectoryNio(dir, showHidden)
     }
 
-    /**
-     * Simple file listing using File.listFiles() for small directories.
-     * This is faster than NIO for small directories due to lower overhead.
-     */
-    private fun listDirectorySimple(dir: File, showHidden: Boolean): List<FileInfo> {
-        return dir.listFiles()?.toList()?.let { files ->
-            val results = java.util.ArrayList<FileInfo>(files.size)
-            for (file in files) {
-                if (!showHidden && file.isHidden) continue
-                results.add(FileInfo.fromFile(file))
-            }
-            results
-        } ?: emptyList()
-    }
-
-    /**
+/**
      * NIO-based directory listing optimized for large directories.
      * Uses DirectoryStream (lazy iteration, no huge array allocation) and
      * Files.readAttributes (single syscall per file instead of 5+).

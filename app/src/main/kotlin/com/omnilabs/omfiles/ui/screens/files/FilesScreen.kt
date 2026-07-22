@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileCopy
@@ -91,7 +92,6 @@ import com.omnilabs.omfiles.utils.PermissionHandler
 import com.omnilabs.omfiles.utils.formatFileSize
 import com.omnilabs.omfiles.utils.formatDate
 
-// Drag auto-scroll constants
 private const val SCROLL_ZONE_DP = 120
 private const val MAX_SCROLL_SPEED = 250
 
@@ -108,7 +108,6 @@ fun FilesScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
-    // Dialogs state
     var renameText by remember { mutableStateOf("") }
     var createFolderText by remember { mutableStateOf("") }
     var createFileText by remember { mutableStateOf("") }
@@ -118,39 +117,27 @@ fun FilesScreen(
     var draggedFilePath by remember { mutableStateOf<String?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var dropTargetPath by remember { mutableStateOf<String?>(null) }
-
-    // Track item positions for drop target detection: path -> (top, bottom) in root coordinates
     val itemPositions = remember { mutableMapOf<String, Pair<Float, Float>>() }
-
-    // Track where the finger was when drag started (root Y coordinate)
     var touchStartScreenY by remember { mutableFloatStateOf(0f) }
 
-    // Auto-scroll during drag
     val lazyListState = rememberLazyListState()
     var listTop by remember { mutableFloatStateOf(0f) }
     var listBottom by remember { mutableFloatStateOf(0f) }
-    var scrollSpeed by remember { mutableIntStateOf(0) } // pixels/second, positive=down, negative=up
-
-    // Density for pixel-dp conversion
+    var scrollSpeed by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
 
-    // Auto-scroll effect: scrolls the list while dragging near top/bottom edges
-    // Keyed on scrollSpeed so it restarts smoothly on speed changes
     LaunchedEffect(scrollSpeed) {
         if (scrollSpeed != 0 && isDragging) {
             while (isDragging && scrollSpeed != 0) {
                 val currentSpeed = scrollSpeed
                 if (currentSpeed != 0) {
-                    // Positive speed = scroll forward (toward end)
-                    // Negative speed = scroll backward (toward start)
                     lazyListState.dispatchRawDelta(currentSpeed / 60f)
                 }
-                delay(16) // ~60fps
+                delay(16)
             }
         }
     }
 
-    // Get the dragged file info
     val draggedFile = uiState.files.find { it.path == draggedFilePath }
 
     LaunchedEffect(initialPath) {
@@ -164,7 +151,6 @@ fun FilesScreen(
         }
     }
 
-    // Permission denied screen
     if (!uiState.hasStoragePermission) {
         NoPermissionScreen(
             onRetry = { viewModel.checkPermission() },
@@ -210,14 +196,13 @@ fun FilesScreen(
                 )
             },
             confirmButton = {
-                Button(                        onClick = {
-                            val path = uiState.renameTarget
-                            if (path != null) {
-                                viewModel.renameFile(path, renameText.ifEmpty { targetName })
-                                renameText = ""
-                            }
-                        }
-                ) { Text("Rename") }
+                Button(onClick = {
+                    val path = uiState.renameTarget
+                    if (path != null) {
+                        viewModel.renameFile(path, renameText.ifEmpty { targetName })
+                        renameText = ""
+                    }
+                }) { Text("Rename") }
             },
             dismissButton = {
                 OutlinedButton(onClick = { renameText = ""; viewModel.dismissRenameDialog() }) { Text("Cancel") }
@@ -239,12 +224,10 @@ fun FilesScreen(
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.createFolder(createFolderText.ifEmpty { "New Folder" })
-                        createFolderText = ""
-                    }
-                ) { Text("Create") }
+                Button(onClick = {
+                    viewModel.createFolder(createFolderText.ifEmpty { "New Folder" })
+                    createFolderText = ""
+                }) { Text("Create") }
             },
             dismissButton = {
                 OutlinedButton(onClick = { createFolderText = ""; viewModel.dismissCreateFolderDialog() }) { Text("Cancel") }
@@ -266,12 +249,10 @@ fun FilesScreen(
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.createFile(createFileText.ifEmpty { "New File.txt" })
-                        createFileText = ""
-                    }
-                ) { Text("Create") }
+                Button(onClick = {
+                    viewModel.createFile(createFileText.ifEmpty { "New File.txt" })
+                    createFileText = ""
+                }) { Text("Create") }
             },
             dismissButton = {
                 OutlinedButton(onClick = { createFileText = ""; viewModel.dismissCreateFileDialog() }) { Text("Cancel") }
@@ -279,12 +260,8 @@ fun FilesScreen(
         )
     }
 
-    // Properties Dialog
     uiState.propertiesTarget?.let { fileInfo ->
-        PropertiesDialog(
-            fileInfo = fileInfo,
-            onDismiss = viewModel::dismissPropertiesDialog
-        )
+        PropertiesDialog(fileInfo = fileInfo, onDismiss = viewModel::dismissPropertiesDialog)
     }
 
     // ── Main Content ──
@@ -293,7 +270,7 @@ fun FilesScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (uiState.selectionMode) {
-                // Selection mode top bar
+                // Selection mode top bar — Copy / Cut / Rename / Delete / Share
                 TopAppBar(
                     title = {
                         Text(
@@ -308,6 +285,12 @@ fun FilesScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = viewModel::copyToClipboard) {
+                            Icon(Icons.Filled.ContentCopy, "Copy")
+                        }
+                        IconButton(onClick = viewModel::cutToClipboard) {
+                            Icon(Icons.Filled.ContentCut, "Cut")
+                        }
                         IconButton(onClick = {
                             uiState.selectedFiles.firstOrNull()?.let {
                                 viewModel.showRenameDialog(it)
@@ -319,16 +302,6 @@ fun FilesScreen(
                             viewModel.showDeleteConfirmation(uiState.selectedFiles)
                         }) {
                             Icon(Icons.Filled.Delete, "Delete")
-                        }
-                        IconButton(onClick = {
-                            viewModel.copySelectedFiles(uiState.currentPath)
-                        }) {
-                            Icon(Icons.Filled.ContentCopy, "Copy here")
-                        }
-                        IconButton(onClick = {
-                            viewModel.moveSelectedFiles(uiState.currentPath)
-                        }) {
-                            Icon(Icons.Filled.ContentCut, "Move here")
                         }
                         IconButton(onClick = {
                             uiState.selectedFiles.firstOrNull()?.let {
@@ -345,6 +318,7 @@ fun FilesScreen(
                     )
                 )
             } else {
+                // Normal top bar
                 TopAppBar(
                     title = {
                         Column {
@@ -370,6 +344,25 @@ fun FilesScreen(
                         }
                     },
                     actions = {
+                        // Paste button — visible when clipboard has items
+                        if (uiState.clipboardPaths.isNotEmpty()) {
+                            val modeLabel = if (uiState.clipboardMode == "cut") "Paste (Move)" else "Paste (Copy)"
+                            IconButton(onClick = viewModel::pasteFromClipboard) {
+                                Icon(
+                                    Icons.Filled.ContentPaste,
+                                    contentDescription = modeLabel,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(onClick = viewModel::clearClipboard) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Clear clipboard",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         if (uiState.currentPath != "/") {
                             IconButton(onClick = viewModel::navigateUp) {
                                 Icon(Icons.Filled.OpenInNew, "Go up", modifier = Modifier.size(20.dp))
@@ -388,18 +381,12 @@ fun FilesScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Create Folder") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.showCreateFolderDialog()
-                                },
+                                onClick = { showMenu = false; viewModel.showCreateFolderDialog() },
                                 leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) }
                             )
                             DropdownMenuItem(
                                 text = { Text("Create File") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.showCreateFileDialog()
-                                },
+                                onClick = { showMenu = false; viewModel.showCreateFileDialog() },
                                 leadingIcon = { Icon(Icons.Filled.NoteAdd, null) }
                             )
                             HorizontalDivider()
@@ -432,7 +419,6 @@ fun FilesScreen(
             }
         }
     ) { paddingValues ->
-        // Progress indicator for operations
         if (uiState.operationInProgress) {
             Column(
                 modifier = Modifier
@@ -454,18 +440,14 @@ fun FilesScreen(
 
         if (uiState.isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()
             }
         } else if (uiState.files.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -484,7 +466,6 @@ fun FilesScreen(
                 }
             }
         } else {
-            // Content with drag-and-drop support
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = lazyListState,
@@ -492,42 +473,25 @@ fun FilesScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                         .padding(horizontal = 16.dp)
-                        .onSizeChanged { size ->
-                            listBottom = size.height.toFloat()
-                        },
+                        .onSizeChanged { size -> listBottom = size.height.toFloat() },
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(
-                        items = uiState.files,
-                        key = { it.path }
-                    ) { fileInfo ->
+                    items(items = uiState.files, key = { it.path }) { fileInfo ->
                         FileListItem(
                             fileInfo = fileInfo,
                             isSelected = fileInfo.path in uiState.selectedFiles,
-                            isFavorite = fileInfo.path in uiState.favorites,
                             isDropTarget = fileInfo.path == dropTargetPath,
                             selectionMode = uiState.selectionMode,
                             onSingleClick = {
-                                if (uiState.selectionMode) {
-                                    viewModel.toggleSelection(fileInfo.path)
-                                } else if (fileInfo.isDirectory) {
-                                    onNavigateToFolder(fileInfo.path)
-                                } else {
-                                    viewModel.openFile(fileInfo)
-                                }
+                                if (uiState.selectionMode) viewModel.toggleSelection(fileInfo.path)
+                                else if (fileInfo.isDirectory) onNavigateToFolder(fileInfo.path)
+                                else viewModel.openFile(fileInfo)
                             },
                             onLongClick = {
-                                if (!uiState.selectionMode) {
-                                    viewModel.enterSelectionMode(fileInfo.path)
-                                }
+                                if (!uiState.selectionMode) viewModel.enterSelectionMode(fileInfo.path)
                             },
-                            onFavoriteClick = {
-                                viewModel.toggleFavorite(fileInfo.path)
-                            },
-                            onOptionsClick = { fileInfo ->
-                                viewModel.showPropertiesDialog(fileInfo)
-                            },
-                            onItemPositioned = { path, x, top, bottom ->
+                            onOptionsClick = { viewModel.showPropertiesDialog(fileInfo) },
+                            onItemPositioned = { path, _, top, bottom ->
                                 itemPositions[path] = Pair(top, bottom)
                             },
                             onDragStart = { path, touchY ->
@@ -540,78 +504,54 @@ fun FilesScreen(
                                     dropTargetPath = null
                                 }
                             },
-                            onDrag = { dx, dy ->
+                            onDrag = { _, dy ->
                                 dragOffsetY += dy
-
-                                // Detect drop target by absolute finger Y position
                                 val fingerY = touchStartScreenY + dragOffsetY
                                 dropTargetPath = null
-                                // Only folders can be drop targets
                                 for (file in uiState.files) {
                                     if (!file.isDirectory) continue
                                     val positions = itemPositions[file.path] ?: continue
                                     if (fingerY in positions.first..positions.second) {
-                                        if (file.path != draggedFilePath) {
-                                            dropTargetPath = file.path
-                                        }
+                                        if (file.path != draggedFilePath) dropTargetPath = file.path
                                         break
                                     }
                                 }
-
-                                // Auto-scroll logic: scroll when finger is near top/bottom edge
                                 val scrollZonePx = with(density) { SCROLL_ZONE_DP.dp.toPx() }
                                 val listHeight = listBottom - listTop
                                 val fingerInList = fingerY - listTop
-
                                 scrollSpeed = when {
-                                    fingerInList < scrollZonePx && lazyListState.canScrollBackward -> {
-                                        // Near top edge: scroll up
-                                        // Speed increases as finger gets closer to top
+                                    fingerInList < scrollZonePx -> {
                                         val proximity = 1f - (fingerInList / scrollZonePx)
                                         -(proximity * MAX_SCROLL_SPEED).toInt().coerceAtMost(MAX_SCROLL_SPEED)
                                     }
                                     fingerInList > listHeight - scrollZonePx -> {
-                                        // Near bottom edge: scroll down
-                                        val distanceFromBottom = fingerInList - (listHeight - scrollZonePx)
-                                        val proximity = (distanceFromBottom / scrollZonePx).coerceAtMost(1f)
+                                        val dist = fingerInList - (listHeight - scrollZonePx)
+                                        val proximity = (dist / scrollZonePx).coerceAtMost(1f)
                                         (proximity * MAX_SCROLL_SPEED).toInt().coerceAtMost(MAX_SCROLL_SPEED)
                                     }
                                     else -> 0
                                 }
                             },
                             onDragEnd = {
-                                // Handle drop only if a valid target folder is found
                                 val sourcePath = draggedFilePath
                                 val targetFolder = dropTargetPath
                                 if (sourcePath != null && targetFolder != null && targetFolder != sourcePath) {
                                     viewModel.moveFileToFolder(sourcePath, targetFolder)
                                 }
-                                // Reset all drag state
-                                isDragging = false
-                                draggedFilePath = null
-                                dragOffsetY = 0f
-                                dropTargetPath = null
-                                scrollSpeed = 0
+                                isDragging = false; draggedFilePath = null
+                                dragOffsetY = 0f; dropTargetPath = null; scrollSpeed = 0
                             },
                             onDragCancel = {
-                                isDragging = false
-                                draggedFilePath = null
-                                dragOffsetY = 0f
-                                dropTargetPath = null
-                                scrollSpeed = 0
+                                isDragging = false; draggedFilePath = null
+                                dragOffsetY = 0f; dropTargetPath = null; scrollSpeed = 0
                             }
                         )
                     }
-
                     item { Spacer(Modifier.height(80.dp)) }
                 }
 
-                // Drag overlay - shows a floating card following the finger
                 if (isDragging && draggedFile != null) {
-                    DragOverlay(
-                        fileName = draggedFile.name,
-                        offsetY = dragOffsetY
-                    )
+                    DragOverlay(fileName = draggedFile.name, offsetY = dragOffsetY)
                 }
             }
         }
@@ -623,14 +563,8 @@ private fun NoPermissionScreen(
     onRetry: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
             Icon(
                 Icons.Filled.Info,
                 contentDescription = null,
@@ -638,11 +572,7 @@ private fun NoPermissionScreen(
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
             )
             Spacer(Modifier.height(24.dp))
-            Text(
-                "Storage Permission Required",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text("Storage Permission Required", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(12.dp))
             Text(
                 "OmniFiles needs storage access to browse and manage your files.\n\n" +
@@ -667,10 +597,7 @@ private fun NoPermissionScreen(
 }
 
 @Composable
-private fun PropertiesDialog(
-    fileInfo: FileInfo,
-    onDismiss: () -> Unit
-) {
+private fun PropertiesDialog(fileInfo: FileInfo, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Properties", fontWeight = FontWeight.Bold) },
@@ -698,9 +625,7 @@ private fun PropertiesDialog(
                 PropRow("Hidden", if (fileInfo.isHidden) "Yes" else "No")
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
 }
 
@@ -724,20 +649,9 @@ private fun PropRow(label: String, value: String) {
     }
 }
 
-/**
- * Floating card overlay shown during drag operations.
- * Follows the user's finger to show what file is being dragged.
- */
 @Composable
-private fun DragOverlay(
-    fileName: String,
-    offsetY: Float
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp)
-    ) {
+private fun DragOverlay(fileName: String, offsetY: Float) {
+    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp)) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -748,18 +662,11 @@ private fun DragOverlay(
             tonalElevation = 8.dp
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.MoveDown,
-                    contentDescription = "Moving",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(20.dp)
-                )
+                Icon(Icons.Filled.MoveDown, "Moving", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = fileName,

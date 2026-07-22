@@ -104,10 +104,15 @@ class SearchEngine @Inject constructor(
 
             // Re-index only if data has changed
             val lastIndexedTime = searchIndexDao.getMaxLastModified()
-            val storageChanged = rootPath.toFile().lastModified() > (lastIndexedTime ?: 0L)
-            if (lastIndexedTime != null && !storageChanged) {
-                val count = searchIndexDao.getCount()
-                return@withContext OperationResult.Success(count)
+            try {
+                val currentLastMod = Files.getLastModifiedTime(rootPath).toMillis()
+                val storageChanged = currentLastMod > (lastIndexedTime ?: 0L)
+                if (lastIndexedTime != null && !storageChanged) {
+                    val count = searchIndexDao.getCount()
+                    return@withContext OperationResult.Success(count)
+                }
+            } catch (_: Exception) {
+                // Can't read modification time — force re-index
             }
 
             // Clear existing index for this tree

@@ -25,8 +25,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
+
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Archive
@@ -76,12 +75,10 @@ import com.omnilabs.omfiles.utils.formatDate
 fun FileListItem(
     fileInfo: FileInfo,
     isSelected: Boolean = false,
-    isFavorite: Boolean = false,
     isDropTarget: Boolean = false,
     selectionMode: Boolean = false,
     onSingleClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    onFavoriteClick: () -> Unit = {},
     onOptionsClick: (FileInfo) -> Unit = {},
     onItemPositioned: (String, Float, Float, Float) -> Unit = { _, _, _, _ -> },
     onDragStart: (String, Float) -> Unit = { _, _ -> },
@@ -223,36 +220,18 @@ fun FileListItem(
                 }
             }
 
-            // Action buttons (info + favorite)
+            // Info/properties button
             if (!selectionMode) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                IconButton(
+                    onClick = { onOptionsClick(fileInfo) },
+                    modifier = Modifier.size(20.dp)
                 ) {
-                    // Info/Properties button — reusable icon button wrapper
-                    IconButton(
-                        onClick = { onOptionsClick(fileInfo) },
+                    Icon(
+                        imageVector = Icons.Filled.Info,
+                        contentDescription = "Properties",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         modifier = Modifier.size(20.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Info,
-                            contentDescription = "Properties",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    // Favorite star button
-                    IconButton(
-                        onClick = { onFavoriteClick() },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
+                    )
                 }
             }
         }

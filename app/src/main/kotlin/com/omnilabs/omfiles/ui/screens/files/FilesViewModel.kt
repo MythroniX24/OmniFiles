@@ -10,7 +10,6 @@ import com.omnilabs.omfiles.domain.model.OperationResult
 import com.omnilabs.omfiles.domain.model.SortMode
 import com.omnilabs.omfiles.domain.model.SortOrder
 import com.omnilabs.omfiles.domain.repository.ArchiveRepository
-import com.omnilabs.omfiles.domain.repository.FavoriteRepository
 import com.omnilabs.omfiles.domain.repository.FileRepository
 import com.omnilabs.omfiles.domain.repository.RecentFilesRepository
 import com.omnilabs.omfiles.domain.repository.RecycleBinRepository
@@ -37,7 +36,6 @@ data class FilesUiState(
     val files: List<FileInfo> = emptyList(),
     val selectedFiles: Set<String> = emptySet(),
     val sortOptions: FileSortOptions = FileSortOptions(),
-    val favorites: Set<String> = emptySet(),
     val showHidden: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -55,13 +53,15 @@ data class FilesUiState(
     val showExtractDialog: Boolean = false,
     val extractTarget: String? = null,
     val operationInProgress: Boolean = false,
-    val operationMessage: String? = null
+    val operationMessage: String? = null,
+    // Clipboard for copy/cut → paste flow
+    val clipboardPaths: List<String> = emptyList(),
+    val clipboardMode: String? = null  // "copy" or "cut"
 )
 
 @HiltViewModel
 class FilesViewModel @Inject constructor(
     private val fileRepository: FileRepository,
-    private val favoriteRepository: FavoriteRepository,
     private val recentFilesRepository: RecentFilesRepository,
     private val archiveRepository: ArchiveRepository,
     private val recycleBinRepository: RecycleBinRepository,
@@ -74,9 +74,7 @@ class FilesViewModel @Inject constructor(
 
     private val _isLoading = MutableStateFlow(false)
     private val _currentPath = MutableStateFlow("/")
-
     private val _files = MutableStateFlow<List<FileInfo>>(emptyList())
-    private val _favorites = MutableStateFlow<Set<String>>(emptySet())
     private val _sortOptions = MutableStateFlow(FileSortOptions())
     private val _showHidden = MutableStateFlow(false)
     private val _selectedFiles = MutableStateFlow<Set<String>>(emptySet())
@@ -94,40 +92,43 @@ class FilesViewModel @Inject constructor(
     private val _extractTarget = MutableStateFlow<String?>(null)
     private val _operationInProgress = MutableStateFlow(false)
     private val _operationMessage = MutableStateFlow<String?>(null)
+    private val _clipboardPaths = MutableStateFlow<List<String>>(emptyList())
+    private val _clipboardMode = MutableStateFlow<String?>(null)
 
     // Use Iterable-based combine to avoid Kotlin 2.1 flow count limit on combine overloads
     val uiState: StateFlow<FilesUiState> = combine(
         listOf<StateFlow<*>>(
-            _currentPath, _files, _favorites, _sortOptions, _showHidden, _isLoading,
+            _currentPath, _files, _sortOptions, _showHidden, _isLoading,
             _selectedFiles, _selectionMode, _hasStoragePermission,
             _showDeleteConfirmation, _showRenameDialog, _renameTarget,
             _showCreateFolderDialog, _showCreateFileDialog, _pendingDeletePaths,
             _showPropertiesDialog, _propertiesTarget, _showExtractDialog, _extractTarget,
-            _operationInProgress, _operationMessage
+            _operationInProgress, _operationMessage, _clipboardPaths, _clipboardMode
         )
     ) { values ->
         FilesUiState(
             currentPath = values[0] as String,
             files = values[1] as List<FileInfo>,
-            selectedFiles = values[6] as Set<String>,
-            sortOptions = values[3] as FileSortOptions,
-            favorites = values[2] as Set<String>,
-            showHidden = values[4] as Boolean,
-            isLoading = values[5] as Boolean,
-            hasStoragePermission = values[8] as Boolean,
-            selectionMode = values[7] as Boolean,
-            showDeleteConfirmation = values[9] as Boolean,
-            showRenameDialog = values[10] as Boolean,
-            renameTarget = values[11] as String?,
-            showCreateFolderDialog = values[12] as Boolean,
-            showCreateFileDialog = values[13] as Boolean,
-            pendingDeletePaths = values[14] as Set<String>,
-            showPropertiesDialog = values[15] as Boolean,
-            propertiesTarget = values[16] as FileInfo?,
-            showExtractDialog = values[17] as Boolean,
-            extractTarget = values[18] as String?,
-            operationInProgress = values[19] as Boolean,
-            operationMessage = values[20] as String?
+            sortOptions = values[2] as FileSortOptions,
+            showHidden = values[3] as Boolean,
+            isLoading = values[4] as Boolean,
+            selectedFiles = values[5] as Set<String>,
+            selectionMode = values[6] as Boolean,
+            hasStoragePermission = values[7] as Boolean,
+            showDeleteConfirmation = values[8] as Boolean,
+            showRenameDialog = values[9] as Boolean,
+            renameTarget = values[10] as String?,
+            showCreateFolderDialog = values[11] as Boolean,
+            showCreateFileDialog = values[12] as Boolean,
+            pendingDeletePaths = values[13] as Set<String>,
+            showPropertiesDialog = values[14] as Boolean,
+            propertiesTarget = values[15] as FileInfo?,
+            showExtractDialog = values[16] as Boolean,
+            extractTarget = values[17] as String?,
+            operationInProgress = values[18] as Boolean,
+            operationMessage = values[19] as String?,
+            clipboardPaths = values[20] as List<String>,
+            clipboardMode = values[21] as String?
         )
     }.stateIn(
         scope = viewModelScope,
@@ -160,15 +161,6 @@ class FilesViewModel @Inject constructor(
 
                 val fileList = fileRepository.getFiles(path, sortOptions, _showHidden.value).first()
                 _files.value = fileList
-
-                // Batch favorite check: single DB query instead of N queries
-                if (fileList.isNotEmpty()) {
-                    val paths = fileList.map { it.path }
-                    _favorites.value = favoriteRepository.getFavoritePathsIn(paths)
-                } else {
-                    _favorites.value = emptySet()
-                }
-
                 recentFilesRepository.addRecentFile(path)
                 _isLoading.value = false
             } catch (e: Exception) {
@@ -180,9 +172,7 @@ class FilesViewModel @Inject constructor(
 
     fun checkPermission() {
         _hasStoragePermission.value = PermissionHandler.hasStoragePermission(context)
-        if (_hasStoragePermission.value) {
-            refresh()
-        }
+        if (_hasStoragePermission.value) refresh()
     }
 
     init {
@@ -225,37 +215,87 @@ class FilesViewModel @Inject constructor(
         _selectedFiles.value = emptySet()
     }
 
-    // ── Favorites ──
+    // ── Copy / Cut / Paste (Clipboard system) ──
 
-    fun toggleFavorite(path: String) {
+    fun copyToClipboard() {
+        val paths = _selectedFiles.value.toList()
+        if (paths.isEmpty()) return
+        _clipboardPaths.value = paths
+        _clipboardMode.value = "copy"
+        exitSelectionMode()
+        _error.value = "${paths.size} item(s) copied to clipboard"
+    }
+
+    fun cutToClipboard() {
+        val paths = _selectedFiles.value.toList()
+        if (paths.isEmpty()) return
+        _clipboardPaths.value = paths
+        _clipboardMode.value = "cut"
+        exitSelectionMode()
+        _error.value = "${paths.size} item(s) cut to clipboard — navigate to destination and tap Paste"
+    }
+
+    fun pasteFromClipboard() {
+        val paths = _clipboardPaths.value
+        val mode = _clipboardMode.value
+        if (paths.isEmpty() || mode == null) return
+
+        val destFolder = _currentPath.value
+        // Don't paste into source folder for copy (no-op) — keep clipboard intact
+        val allInSameFolder = paths.all { File(it).parent == destFolder }
+        if (allInSameFolder && mode == "copy") {
+            _error.value = "Files are already in this folder — navigate elsewhere to paste, or use Duplicate"
+            return
+        }
+
         viewModelScope.launch {
-            try {
-                if (favoriteRepository.isFavorite(path)) {
-                    favoriteRepository.removeFavorite(path)
+            setOperation(if (mode == "cut") "Moving ${paths.size} item(s)…" else "Copying ${paths.size} item(s)…")
+            var successCount = 0
+            var failCount = 0
+
+            for (path in paths) {
+                val fileName = File(path).name
+                val destPath = "$destFolder/$fileName"
+                val result = if (mode == "cut") {
+                    fileRepository.moveFile(path, destPath)
                 } else {
-                    favoriteRepository.addFavorite(path)
+                    fileRepository.copyFile(path, destPath)
                 }
-                loadFiles(_currentPath.value)
-            } catch (e: Exception) {
-                _error.value = "Failed to toggle favorite: ${e.message}"
+                when (result) {
+                    is OperationResult.Success -> successCount++
+                    is OperationResult.Error -> failCount++
+                }
+            }
+
+            clearClipboard()
+            clearOperation()
+            loadFiles(_currentPath.value)
+
+            val verb = if (mode == "cut") "Moved" else "Copied"
+            if (failCount > 0) {
+                _error.value = "$verb $successCount item(s), $failCount failed"
+            } else {
+                _error.value = "$verb $successCount item(s) successfully"
             }
         }
     }
 
+    fun clearClipboard() {
+        _clipboardPaths.value = emptyList()
+        _clipboardMode.value = null
+    }
+
+    fun hasClipboardContent(): Boolean = _clipboardPaths.value.isNotEmpty()
+
     // ── Create ──
 
-    fun showCreateFolderDialog() {
-        _showCreateFolderDialog.value = true
-    }
-
-    fun dismissCreateFolderDialog() {
-        _showCreateFolderDialog.value = false
-    }
+    fun showCreateFolderDialog() { _showCreateFolderDialog.value = true }
+    fun dismissCreateFolderDialog() { _showCreateFolderDialog.value = false }
 
     fun createFolder(folderName: String) {
         viewModelScope.launch {
             _showCreateFolderDialog.value = false
-            setOperation("Creating folder\u2026")
+            setOperation("Creating folder…")
             when (val result = fileRepository.createFolder(_currentPath.value, folderName)) {
                 is OperationResult.Success -> {
                     clearOperation()
@@ -269,18 +309,13 @@ class FilesViewModel @Inject constructor(
         }
     }
 
-    fun showCreateFileDialog() {
-        _showCreateFileDialog.value = true
-    }
-
-    fun dismissCreateFileDialog() {
-        _showCreateFileDialog.value = false
-    }
+    fun showCreateFileDialog() { _showCreateFileDialog.value = true }
+    fun dismissCreateFileDialog() { _showCreateFileDialog.value = false }
 
     fun createFile(fileName: String) {
         viewModelScope.launch {
             _showCreateFileDialog.value = false
-            setOperation("Creating file\u2026")
+            setOperation("Creating file…")
             when (val result = fileRepository.createFile(_currentPath.value, fileName)) {
                 is OperationResult.Success -> {
                     clearOperation()
@@ -310,7 +345,7 @@ class FilesViewModel @Inject constructor(
         viewModelScope.launch {
             _showRenameDialog.value = false
             _renameTarget.value = null
-            setOperation("Renaming\u2026")
+            setOperation("Renaming…")
             when (val result = fileRepository.renameFile(path, newName)) {
                 is OperationResult.Success -> {
                     clearOperation()
@@ -341,7 +376,7 @@ class FilesViewModel @Inject constructor(
             _showDeleteConfirmation.value = false
             val paths = _pendingDeletePaths.value.toList()
             _pendingDeletePaths.value = emptySet()
-            setOperation("Moving ${paths.size} item${if (paths.size != 1) "s" else ""} to Recycle Bin\u2026")
+            setOperation("Moving ${paths.size} item${if (paths.size != 1) "s" else ""} to Recycle Bin…")
 
             var successCount = 0
             var failCount = 0
@@ -359,64 +394,6 @@ class FilesViewModel @Inject constructor(
                 _error.value = "Moved $successCount item(s) to Recycle Bin, $failCount failed"
             } else {
                 _error.value = "$successCount item(s) moved to Recycle Bin"
-            }
-        }
-    }
-
-    // ── Copy ──
-
-    fun copySelectedFiles(destinationPath: String) {
-        viewModelScope.launch {
-            val paths = _selectedFiles.value.toList()
-            exitSelectionMode()
-            setOperation("Copying ${paths.size} item${if (paths.size != 1) "s" else ""}\u2026")
-
-            var successCount = 0
-            var failCount = 0
-            for (path in paths) {
-                val fileName = File(path).name
-                val destPath = "$destinationPath/$fileName"
-                when (val result = fileRepository.copyFile(path, destPath)) {
-                    is OperationResult.Success -> successCount++
-                    is OperationResult.Error -> failCount++
-                }
-            }
-
-            clearOperation()
-            loadFiles(_currentPath.value)
-            if (failCount > 0) {
-                _error.value = "Copied $successCount item(s), $failCount failed"
-            } else if (successCount > 0) {
-                _error.value = "Copied $successCount item(s) successfully"
-            }
-        }
-    }
-
-    // ── Move ──
-
-    fun moveSelectedFiles(destinationPath: String) {
-        viewModelScope.launch {
-            val paths = _selectedFiles.value.toList()
-            exitSelectionMode()
-            setOperation("Moving ${paths.size} item${if (paths.size != 1) "s" else ""}\u2026")
-
-            var successCount = 0
-            var failCount = 0
-            for (path in paths) {
-                val fileName = File(path).name
-                val destPath = "$destinationPath/$fileName"
-                when (val result = fileRepository.moveFile(path, destPath)) {
-                    is OperationResult.Success -> successCount++
-                    is OperationResult.Error -> failCount++
-                }
-            }
-
-            clearOperation()
-            loadFiles(_currentPath.value)
-            if (failCount > 0) {
-                _error.value = "Moved $successCount item(s), $failCount failed"
-            } else if (successCount > 0) {
-                _error.value = "Moved $successCount item(s) successfully"
             }
         }
     }
@@ -480,8 +457,7 @@ class FilesViewModel @Inject constructor(
         viewModelScope.launch {
             _showExtractDialog.value = false
             _extractTarget.value = null
-            setOperation("Extracting\u2026")
-
+            setOperation("Extracting…")
             when (val result = archiveRepository.extractArchive(archivePath, destinationDir)) {
                 is OperationResult.Success -> {
                     clearOperation()
@@ -500,11 +476,6 @@ class FilesViewModel @Inject constructor(
 
     fun setSortMode(mode: SortMode) {
         _sortOptions.value = _sortOptions.value.copy(mode = mode)
-        refresh()
-    }
-
-    fun setSortOrder(order: SortOrder) {
-        _sortOptions.value = _sortOptions.value.copy(order = order)
         refresh()
     }
 
@@ -528,7 +499,7 @@ class FilesViewModel @Inject constructor(
         }
     }
 
-    // ── Extract from archive ──
+    // ── Duplicate ──
 
     fun duplicateFile(path: String) {
         viewModelScope.launch {
@@ -537,15 +508,16 @@ class FilesViewModel @Inject constructor(
             val name = file.nameWithoutExtension
             val ext = file.extension
             var counter = 1
-            var newName = "$name (copy).$ext"
-            if (ext.isEmpty()) newName = "$name (copy)"
-
+            var newName = if (ext.isNotEmpty()) "$name (copy $counter).$ext" else "$name (copy $counter)"
+            if (counter == 1) {
+                newName = if (ext.isNotEmpty()) "$name (copy).$ext" else "$name (copy)"
+            }
             while (File(parent, newName).exists()) {
                 counter++
                 newName = if (ext.isNotEmpty()) "$name (copy $counter).$ext" else "$name (copy $counter)"
             }
 
-            setOperation("Duplicating\u2026")
+            setOperation("Duplicating…")
             when (val result = fileRepository.copyFile(path, "$parent/$newName")) {
                 is OperationResult.Success -> {
                     clearOperation()
@@ -561,9 +533,7 @@ class FilesViewModel @Inject constructor(
 
     // ── Helpers ──
 
-    fun clearError() {
-        _error.value = null
-    }
+    fun clearError() { _error.value = null }
 
     private fun setOperation(message: String) {
         _operationInProgress.value = true
@@ -579,15 +549,10 @@ class FilesViewModel @Inject constructor(
 
     // ── Drag and Drop ──
 
-    /**
-     * Move a file to a target folder.
-     * Called when a drag-and-drop operation completes.
-     */
     fun moveFileToFolder(sourcePath: String, targetFolderPath: String) {
         viewModelScope.launch {
             val sourceFile = File(sourcePath)
             val destPath = File(targetFolderPath, sourceFile.name).absolutePath
-
             setOperation("Moving ${sourceFile.name}…")
             when (val result = fileRepository.moveFile(sourcePath, destPath)) {
                 is OperationResult.Success -> {

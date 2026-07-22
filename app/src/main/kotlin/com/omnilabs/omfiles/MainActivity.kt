@@ -195,7 +195,7 @@ private fun MainScreen() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize()
         bottomBar = {
             val showBottomBar = currentRoute in listOf(
                 NavRoutes.HOME,
