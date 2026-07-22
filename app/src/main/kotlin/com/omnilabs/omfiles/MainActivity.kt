@@ -223,6 +223,11 @@ private fun MainScreen() {
                                         popUpTo(NavRoutes.HOME)
                                     }
                                 }
+                                "recent" -> {
+                                    navController.navigate(NavRoutes.SEARCH) {
+                                        popUpTo(NavRoutes.HOME)
+                                    }
+                                }
                                 "settings" -> {
                                     navController.navigate(NavRoutes.SETTINGS) {
                                         popUpTo(NavRoutes.HOME)
