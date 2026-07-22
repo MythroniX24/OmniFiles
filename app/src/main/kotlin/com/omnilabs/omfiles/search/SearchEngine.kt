@@ -1,6 +1,5 @@
 package com.omnilabs.omfiles.search
 
-import android.content.Context
 import android.os.Environment
 import com.omnilabs.omfiles.data.local.dao.SearchIndexDao
 import com.omnilabs.omfiles.data.local.entity.SearchIndexEntity
@@ -34,8 +33,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class SearchEngine @Inject constructor(
-    private val searchIndexDao: SearchIndexDao,
-    private val appContext: Context
+    private val searchIndexDao: SearchIndexDao
 ) {
 
     companion object {
