@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <cstdio>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <chrono>
@@ -140,6 +141,43 @@ Java_com_omnilabs_omfiles_native_1lister_NativeFileLister_listDirectoryNative(
     env->SetObjectArrayElement(result, 5, hiddenArray);
 
     return result;
+}
+
+// ── JNI function: readFileSignatureNative ──────────────────────────────────
+// Reads the first `count` bytes of a file and returns them as a hex string.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_omnilabs_omfiles_native_1lister_NativeFileLister_readFileSignatureNative(
+    JNIEnv *env,
+    jclass /* clazz */,
+    jstring jFilePath,
+    jint count)
+{
+    const char *filePathCStr = env->GetStringUTFChars(jFilePath, nullptr);
+    if (filePathCStr == nullptr) return env->NewStringUTF("");
+
+    FILE *file = fopen(filePathCStr, "rb");
+    env->ReleaseStringUTFChars(jFilePath, filePathCStr);
+    if (file == nullptr) return env->NewStringUTF("");
+
+    int readCount = count > 64 ? 64 : count;
+    if (readCount <= 0) readCount = 16;
+
+    std::vector<unsigned char> buffer(readCount);
+    size_t bytesRead = fread(buffer.data(), 1, readCount, file);
+    fclose(file);
+
+    if (bytesRead == 0) return env->NewStringUTF("");
+
+    std::string hexString;
+    hexString.reserve(bytesRead * 3);
+    char hex[4];
+    for (size_t i = 0; i < bytesRead; i++) {
+        snprintf(hex, sizeof(hex), "%02X ", buffer[i]);
+        hexString += hex;
+    }
+    if (!hexString.empty()) hexString.pop_back(); // remove trailing space
+
+    return env->NewStringUTF(hexString.c_str());
 }
 
 // ── JNI function: getDirectoryCountNative ─────────────────────────────────

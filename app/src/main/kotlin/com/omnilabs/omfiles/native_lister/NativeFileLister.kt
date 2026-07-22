@@ -128,4 +128,23 @@ object NativeFileLister {
      * Quickly count entries in a directory using C++ readdir().
      */
     private external fun getDirectoryCountNative(dirPath: String): Int
+
+    /**
+     * Read the first bytes of a file and return them as a hex string.
+     * Useful for magic-number based file type detection.
+     */
+    private external fun readFileSignatureNative(filePath: String, count: Int): String
+
+    /**
+     * Public helper to read a file's signature hex string via the native engine.
+     */
+    fun readFileSignature(filePath: String, count: Int = 16): String {
+        if (!nativeAvailable) return ""
+        return try {
+            readFileSignatureNative(filePath, count)
+        } catch (e: Exception) {
+            Log.w(TAG, "Native signature read failed: ${e.message}")
+            ""
+        }
+    }
 }

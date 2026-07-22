@@ -99,6 +99,7 @@ fun FilesScreen(
     onNavigateBack: () -> Unit,
     onNavigateToFolder: (String) -> Unit,
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToPreview: (String) -> Unit = {},
     viewModel: FilesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -145,6 +146,14 @@ fun FilesScreen(
         error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
+        }
+    }
+
+    val previewPath by viewModel.navigateToPreview.collectAsState()
+    LaunchedEffect(previewPath) {
+        previewPath?.let {
+            onNavigateToPreview(it)
+            viewModel.clearPreviewNavigation()
         }
     }
 

@@ -15,6 +15,7 @@ import com.omnilabs.omfiles.ui.screens.files.FilesScreen
 import com.omnilabs.omfiles.ui.screens.home.HomeScreen
 import com.omnilabs.omfiles.ui.screens.search.SearchScreen
 import com.omnilabs.omfiles.ui.screens.recycle.RecycleBinScreen
+import com.omnilabs.omfiles.ui.screens.preview.PreviewScreen
 import com.omnilabs.omfiles.ui.screens.settings.SettingsScreen
 import java.net.URLDecoder
 
@@ -81,6 +82,9 @@ fun OmniFilesNavGraph(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToFolder = { folderPath ->
                     navController.navigate(NavRoutes.files(folderPath))
+                },
+                onNavigateToPreview = { previewPath ->
+                    navController.navigate(NavRoutes.preview(previewPath))
                 }
             )
         }
@@ -104,6 +108,22 @@ fun OmniFilesNavGraph(
         composable(NavRoutes.RECYCLE) {
             RecycleBinScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = NavRoutes.PREVIEW,
+            arguments = listOf(
+                navArgument("path") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val path = URLDecoder.decode(
+                backStackEntry.arguments?.getString("path") ?: "",
+                "UTF-8"
+            )
+            PreviewScreen(
+                path = path,
+                onBack = { navController.popBackStack() }
             )
         }
     }

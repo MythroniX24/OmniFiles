@@ -13,7 +13,8 @@ import com.omnilabs.omfiles.domain.repository.ArchiveRepository
 import com.omnilabs.omfiles.domain.repository.FileRepository
 import com.omnilabs.omfiles.domain.repository.RecentFilesRepository
 import com.omnilabs.omfiles.domain.repository.RecycleBinRepository
-import com.omnilabs.omfiles.domain.repository.SettingsRepository
+import com.omnilabs.omfiles.preview.PreviewRegistry
+import com.omnilabs.omfiles.preview.PreviewType
 import com.omnilabs.omfiles.utils.FileUtils
 import com.omnilabs.omfiles.utils.PermissionHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,12 +66,15 @@ class FilesViewModel @Inject constructor(
     private val recentFilesRepository: RecentFilesRepository,
     private val archiveRepository: ArchiveRepository,
     private val recycleBinRepository: RecycleBinRepository,
-    settingsRepository: SettingsRepository,
+    private val previewRegistry: PreviewRegistry,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _navigateToPreview = MutableStateFlow<String?>(null)
+    val navigateToPreview: StateFlow<String?> = _navigateToPreview.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     private val _currentPath = MutableStateFlow("/")
@@ -404,12 +408,21 @@ class FilesViewModel @Inject constructor(
         if (fileInfo.isDirectory) return
         viewModelScope.launch {
             try {
-                val file = File(fileInfo.path)
-                val intent = FileUtils.openFile(context, file)
-                if (intent.resolveActivity(context.packageManager) != null) {
-                    context.startActivity(intent)
+                val entry = previewRegistry.resolve(fileInfo)
+                val internalTypes = setOf(
+                    PreviewType.IMAGE, PreviewType.TEXT, PreviewType.CODE,
+                    PreviewType.ARCHIVE, PreviewType.APK, PreviewType.UNKNOWN
+                )
+                if (entry.type in internalTypes) {
+                    _navigateToPreview.value = fileInfo.path
                 } else {
-                    _error.value = "No app available to open this file type"
+                    val file = File(fileInfo.path)
+                    val intent = FileUtils.openFile(context, file)
+                    if (intent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(intent)
+                    } else {
+                        _error.value = "No app available to open this file type"
+                    }
                 }
             } catch (e: Exception) {
                 _error.value = "Failed to open file: ${e.message}"
@@ -534,6 +547,8 @@ class FilesViewModel @Inject constructor(
     // ── Helpers ──
 
     fun clearError() { _error.value = null }
+
+    fun clearPreviewNavigation() { _navigateToPreview.value = null }
 
     private fun setOperation(message: String) {
         _operationInProgress.value = true
