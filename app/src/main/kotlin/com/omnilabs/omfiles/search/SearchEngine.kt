@@ -11,12 +11,12 @@ import com.omnilabs.omfiles.domain.repository.SearchIndexStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import javax.inject.Inject
@@ -31,7 +31,6 @@ import javax.inject.Singleton
  * - NIO DirectoryStream + readAttributes for the fastest possible index-building
  * - Relevance-ranked results (exact match > prefix match > word match > substring)
  * - Auto-indexing on first launch with progress tracking
- * - No NDK required — pure Kotlin + SQLite FTS4 is already extremely fast
  */
 @Singleton
 class SearchEngine @Inject constructor(
@@ -41,19 +40,9 @@ class SearchEngine @Inject constructor(
 
     companion object {
         private const val SEARCH_LIMIT = 200
-        private const val SUGGEST_LIMIT = 5
         private const val BATCH_SIZE = 500
     }
 
-    /**
-     * Returns search results as a Flow that emits whenever the index changes.
-     *
-     * Uses TWO strategies in parallel for maximum coverage:
-     * 1. FTS4 MATCH — fast word/prefix search (primary)
-     * 2. LIKE '%query%' — fallback for substring matching
-     *
-     * Results are merged with duplicates removed, ranked by relevance.
-     */
     fun search(filters: SearchFilters): Flow<List<FileInfo>> {
         val query = filters.query.trim().lowercase()
         if (query.isBlank()) return flow { emit(emptyList()) }
@@ -73,7 +62,6 @@ class SearchEngine @Inject constructor(
                 searchIndexDao.searchLike(query, SEARCH_LIMIT)
             }
 
-            // Merge FTS + LIKE results, deduplicate, keep FTS order first
             combine(ftsFlow, likeFlow) { fts, like ->
                 val seen = mutableSetOf<String>()
                 val merged = mutableListOf<SearchIndexEntity>()
@@ -82,15 +70,11 @@ class SearchEngine @Inject constructor(
                 }
                 merged
             }.collect { entities ->
-                emit(entities.map { it.toFileInfo(filters.caseSensitive) })
+                emit(entities.map { it.toFileInfo() })
             }
         }.flowOn(Dispatchers.IO)
     }
 
-    /**
-     * Returns quick suggestions (top 5) as the user types — no debounce needed.
-     * Uses prefix matching which is the fastest query possible.
-     */
     fun suggest(query: String): Flow<List<FileInfo>> {
         val q = query.trim().lowercase()
         if (q.length < 1) return flow { emit(emptyList()) }
@@ -100,12 +84,14 @@ class SearchEngine @Inject constructor(
     }
 
     /**
-     * Fast file scanning using NIO DirectoryStream (no large array allocation).
-     * Uses File.readAttributes for single-syscall metadata.
-     * Batch-inserts into Room every 500 entries to keep RAM usage minimal.
+     * Full re-index of a directory tree.
      *
-     * Scans top-level storage and two levels deep by default, covering the
-     * vast majority of user-visible files without being too aggressive.
+     * Phases:
+     * 1. Walk the file tree and collect all non-hidden file paths (NIO, synchronous)
+     * 2. Process paths in batches using suspend functions (Room inserts)
+     *
+     * This two-phase approach avoids calling suspend functions inside
+     * Java's non-suspend Files.walk().forEach() lambda.
      */
     suspend fun indexFolder(
         path: String,
@@ -120,11 +106,8 @@ class SearchEngine @Inject constructor(
 
             // Re-index only if data has changed
             val lastIndexedTime = searchIndexDao.getMaxLastModified()
-            val rootFile = rootPath.toFile()
-            val storageChanged = rootFile.lastModified() > (lastIndexedTime ?: 0L)
-
+            val storageChanged = rootPath.toFile().lastModified() > (lastIndexedTime ?: 0L)
             if (lastIndexedTime != null && !storageChanged) {
-                // Index is fresh — just return current count
                 val count = searchIndexDao.getCount()
                 return@withContext OperationResult.Success(count)
             }
@@ -132,46 +115,46 @@ class SearchEngine @Inject constructor(
             // Clear existing index for this tree
             searchIndexDao.deleteByFolder(path)
 
-            val entries = mutableListOf<SearchIndexEntity>()
-            var indexed = 0
-
+            // Phase 1: Walk file tree and collect non-hidden paths
+            // Uses regular forEach (synchronous, no suspend calls)
+            val allPaths = mutableListOf<Path>()
             Files.walk(rootPath, maxDepth).use { stream ->
-                stream.forEach { javaFilePath ->
-                    val name = javaFilePath.fileName.toString()
-
-                    // Skip hidden files/folders to keep index lean
-                    if (name.startsWith('.')) return@forEach
-
-                    try {
-                        val attrs = Files.readAttributes(javaFilePath, BasicFileAttributes::class.java)
-                        val entity = SearchIndexEntity(
-                            path = javaFilePath.toAbsolutePath().toString(),
-                            name = name,
-                            extension = if (attrs.isRegularFile()) name.substringAfterLast('.', "")
-                                .lowercase() else "",
-                            isDirectory = attrs.isDirectory(),
-                            size = if (attrs.isRegularFile()) attrs.size() else 0L,
-                            lastModified = attrs.lastModifiedTime().toMillis(),
-                            parentPath = javaFilePath.parent?.toAbsolutePath()?.toString() ?: ""
-                        )
-
-                        entries.add(entity)
-                        indexed++
-
-                        if (entries.size >= BATCH_SIZE) {
-                            searchIndexDao.insertAll(entries.toList())
-                            entries.clear()
-                            onProgress?.invoke(indexed, indexed * 2) // rough estimate
-                        }
-                    } catch (_: Exception) {
-                        // Skip files we can't read
+                stream.forEach { filePath ->
+                    val name = filePath.fileName.toString()
+                    if (!name.startsWith('.')) {
+                        allPaths.add(filePath)
                     }
                 }
             }
 
-            // Insert remaining
-            if (entries.isNotEmpty()) {
-                searchIndexDao.insertAll(entries)
+            // Phase 2: Batch-process paths with suspend functions
+            // Regular for loop supports suspend calls (in coroutine scope)
+            var indexed = 0
+            for (chunk in allPaths.chunked(BATCH_SIZE)) {
+                val entities = chunk.mapNotNull { filePath ->
+                    try {
+                        val name = filePath.fileName.toString()
+                        val attrs = Files.readAttributes(filePath, BasicFileAttributes::class.java)
+                        SearchIndexEntity(
+                            path = filePath.toAbsolutePath().toString(),
+                            name = name,
+                            extension = if (attrs.isRegularFile()) {
+                                name.substringAfterLast('.', "").lowercase()
+                            } else "",
+                            isDirectory = attrs.isDirectory(),
+                            size = if (attrs.isRegularFile()) attrs.size() else 0L,
+                            lastModified = attrs.lastModifiedTime().toMillis(),
+                            parentPath = filePath.parent?.toAbsolutePath()?.toString() ?: ""
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                if (entities.isNotEmpty()) {
+                    searchIndexDao.insertAll(entities)
+                }
+                indexed += entities.size
+                onProgress?.invoke(indexed, allPaths.size.coerceAtLeast(1))
             }
 
             val totalCount = searchIndexDao.getCount()
@@ -183,8 +166,8 @@ class SearchEngine @Inject constructor(
     }
 
     /**
-     * Quick incremental index of a single folder (used when user navigates
-     * into a folder that hasn't been indexed yet).
+     * Incremental index of a single directory (adds only new files).
+     * Uses regular for loop over NIO DirectoryStream — suspend-safe.
      */
     suspend fun indexFolderIncremental(path: String): OperationResult<Int> = withContext(Dispatchers.IO) {
         try {
@@ -200,7 +183,7 @@ class SearchEngine @Inject constructor(
                     val name = dirEntry.fileName.toString()
                     if (name.startsWith('.')) continue
 
-                    // Skip if already indexed
+                    // Skip if already indexed — using exists call (suspend in for loop = OK)
                     if (searchIndexDao.exists(dirEntry.toAbsolutePath().toString()) > 0) continue
 
                     try {
@@ -209,8 +192,9 @@ class SearchEngine @Inject constructor(
                             SearchIndexEntity(
                                 path = dirEntry.toAbsolutePath().toString(),
                                 name = name,
-                                extension = if (attrs.isRegularFile()) name.substringAfterLast('.', "")
-                                    .lowercase() else "",
+                                extension = if (attrs.isRegularFile()) {
+                                    name.substringAfterLast('.', "").lowercase()
+                                } else "",
                                 isDirectory = attrs.isDirectory(),
                                 size = if (attrs.isRegularFile()) attrs.size() else 0L,
                                 lastModified = attrs.lastModifiedTime().toMillis(),
@@ -258,32 +242,24 @@ class SearchEngine @Inject constructor(
         )
     }
 
-    /**
-     * Check if auto-index is needed (no existing index with data).
-     */
     suspend fun isIndexNeeded(): Boolean = withContext(Dispatchers.IO) {
         searchIndexDao.getCount() == 0
     }
 
-    /**
-     * Auto-index the primary storage if index is empty.
-     * Called once on first launch via WorkManager.
-     */
-    suspend fun autoIndexIfNeeded(onProgress: ((Int, Int) -> Unit)? = null): OperationResult<Int> {
+    suspend fun autoIndexIfNeeded(
+        onProgress: ((Int, Int) -> Unit)? = null
+    ): OperationResult<Int> {
         if (!isIndexNeeded()) {
-            val count = searchIndexDao.getCount()
-            return OperationResult.Success(count)
+            return OperationResult.Success(searchIndexDao.getCount())
         }
         val storagePath = Environment.getExternalStorageDirectory().absolutePath
         return indexFolder(storagePath, maxDepth = 3, onProgress = onProgress)
     }
 
-    // ── Private helpers ──────────────────────────────────────────
-
-    private fun SearchIndexEntity.toFileInfo(caseSensitive: Boolean = false): FileInfo {
+    private fun SearchIndexEntity.toFileInfo(): FileInfo {
         return FileInfo(
             path = path,
-            name = if (caseSensitive) name else name,
+            name = name,
             extension = extension,
             isDirectory = isDirectory,
             isHidden = name.startsWith('.'),
