@@ -329,19 +329,22 @@ private fun QuickAccessGrid(onItemClick: (String) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        val chunked = items.chunked(4)
-        for (rowItems in chunked) {
+        val rows = items.chunked(4)
+        for (rowIndex in rows.indices) {
+            val rowItems = rows[rowIndex]
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                for (item in rowItems) {
-                    QuickAccessTile(item = item, onClick = { onItemClick(item.path) })
-                }
-                // Fill remaining space if less than 4 items
-                val remaining = 4 - rowItems.size
-                for (i in 1..remaining) {
-                    Spacer(Modifier.weight(1f))
+                for (index in 0 until 4) {
+                    if (index < rowItems.size) {
+                        QuickAccessTile(
+                            item = rowItems[index],
+                            onClick = { onItemClick(rowItems[index].path) }
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }
