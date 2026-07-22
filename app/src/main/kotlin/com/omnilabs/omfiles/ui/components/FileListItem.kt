@@ -261,6 +261,7 @@ private data class FileIconStyle(
     val color: Color
 )
 
+@Composable
 private fun iconStyleFor(fileInfo: FileInfo): FileIconStyle {
     return when (fileInfo.fileType) {
         FileType.FOLDER -> FileIconStyle(
