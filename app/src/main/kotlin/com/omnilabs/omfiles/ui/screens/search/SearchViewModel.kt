@@ -65,16 +65,9 @@ class SearchViewModel @Inject constructor(
 
         _uiState.value = state.copy(isSearching = true)
 
-        try {
-            searchRepository.search(state.query).collectLatest { results ->
-                _uiState.value = _uiState.value.copy(
-                    results = results,
-                    isSearching = false
-                )
-            }
-        } catch (e: Exception) {
+        searchRepository.search(state.query).collectLatest { results ->
             _uiState.value = _uiState.value.copy(
-                error = "Search failed: ${e.message}",
+                results = results,
                 isSearching = false
             )
         }

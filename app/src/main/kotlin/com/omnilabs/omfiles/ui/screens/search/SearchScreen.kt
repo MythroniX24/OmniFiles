@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.omnilabs.omfiles.domain.model.FileInfo
 import com.omnilabs.omfiles.utils.formatFileSize
-import com.omnilabs.omfiles.utils.formatDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

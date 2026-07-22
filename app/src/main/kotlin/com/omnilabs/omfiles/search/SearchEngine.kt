@@ -6,9 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.io.File
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import javax.inject.Inject
@@ -27,16 +25,11 @@ class SearchEngine @Inject constructor() {
         private const val MAX_DEPTH = 4
         private const val MIN_QUERY_LENGTH = 1
 
-        // Common directories searched in order of relevance
-        private val SEARCH_ROOTS = listOf(
-            "/storage/emulated/0/Download",
-            "/storage/emulated/0/Documents",
-            "/storage/emulated/0/DCIM",
-            "/storage/emulated/0/Pictures",
-            "/storage/emulated/0/Music",
-            "/storage/emulated/0/Movies",
-            "/storage/emulated/0"
-        )
+        private val searchRoots: List<String> by lazy {
+            val root = Environment.getExternalStorageDirectory().absolutePath
+            listOf("$root/Download", "$root/Documents", "$root/DCIM",
+                "$root/Pictures", "$root/Music", "$root/Movies", root)
+        }
     }
 
     /**
@@ -53,7 +46,7 @@ class SearchEngine @Inject constructor() {
         val results = mutableListOf<FileInfo>()
         val seen = mutableSetOf<String>()
 
-        for (root in SEARCH_ROOTS) {
+        for (root in searchRoots) {
             if (results.size >= MAX_RESULTS) break
 
             val rootPath = Paths.get(root)
