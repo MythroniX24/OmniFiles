@@ -129,6 +129,19 @@ fun HomeScreen(
                     QuickAccessSection(onItemClick = onNavigateToFiles)
                 }
 
+                // ── Favorites ──
+                if (uiState.favorites.isNotEmpty()) {
+                    item {
+                        FavoritesSection(
+                            favorites = uiState.favorites,
+                            onFileClick = { file ->
+                                if (file.isDirectory) onNavigateToFiles(file.path)
+                                else onNavigateToFiles(file.parentPath ?: "/storage/emulated/0")
+                            }
+                        )
+                    }
+                }
+
                 // ── Recent Files ──
                 item {
                     RecentFilesSection(
@@ -442,6 +455,41 @@ private fun QuickAccessTile(item: QuickAccessItem, onClick: () -> Unit, modifier
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun FavoritesSection(
+    favorites: List<FileInfo>,
+    onFileClick: (FileInfo) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Favorites",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 20.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (file in favorites.take(4)) {
+                RecentFileRow(
+                    file = file,
+                    onClick = { onFileClick(file) },
+                    onMoreClick = { }
+                )
+            }
+        }
     }
 }
 

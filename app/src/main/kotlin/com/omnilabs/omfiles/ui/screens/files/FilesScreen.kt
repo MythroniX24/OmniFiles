@@ -36,7 +36,9 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,6 +46,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -73,6 +77,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,6 +85,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.omnilabs.omfiles.domain.model.FileFilter
 import com.omnilabs.omfiles.domain.model.FileInfo
 import com.omnilabs.omfiles.domain.model.FileType
 import com.omnilabs.omfiles.domain.model.SortMode
@@ -289,12 +295,16 @@ fun FilesScreen(
                         uiState.selectedFiles.firstOrNull()?.let { path ->
                             uiState.files.firstOrNull { it.path == path }?.let { viewModel.shareFile(it) }
                         }
-                    }
+                    },
+                    onFavorite = viewModel::toggleFavoritesForSelection,
+                    isFavorite = uiState.selectedFiles.any { uiState.favoritePaths.contains(it) }
                 )
             } else {
                 FilesTopAppBar(
                     onSearchClick = onNavigateToSearch,
-                    onAccountClick = { /* TODO */ }
+                    onAccountClick = { /* TODO */ },
+                    onPaste = viewModel::pasteFromClipboard,
+                    hasClipboard = uiState.clipboardPaths.isNotEmpty()
                 )
             }
         },
@@ -318,6 +328,14 @@ fun FilesScreen(
             // Breadcrumb bar
             if (!uiState.selectionMode) {
                 BreadcrumbBar(path = uiState.currentPath)
+            }
+
+            // Filter chips
+            if (!uiState.selectionMode) {
+                FilterChipRow(
+                    currentFilter = uiState.currentFilter,
+                    onFilterSelected = viewModel::setFilter
+                )
             }
 
             if (uiState.operationInProgress) {
@@ -457,9 +475,52 @@ fun FilesScreen(
 }
 
 @Composable
+private fun FilterChipRow(
+    currentFilter: FileFilter,
+    onFilterSelected: (FileFilter) -> Unit
+) {
+    val filterLabels = listOf(
+        FileFilter.ALL to "All",
+        FileFilter.FOLDERS to "Folders",
+        FileFilter.FILES to "Files",
+        FileFilter.IMAGES to "Images",
+        FileFilter.VIDEOS to "Videos",
+        FileFilter.AUDIO to "Audio",
+        FileFilter.DOCUMENTS to "Docs",
+        FileFilter.ARCHIVES to "Archives",
+        FileFilter.APK to "APK"
+    )
+
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(filterLabels.size) { index ->
+            val (filter, label) = filterLabels[index]
+            val selected = currentFilter == filter
+            FilterChip(
+                selected = selected,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    }
+}
+
+@Composable
 private fun FilesTopAppBar(
     onSearchClick: () -> Unit,
-    onAccountClick: () -> Unit
+    onAccountClick: () -> Unit,
+    onPaste: () -> Unit,
+    hasClipboard: Boolean
 ) {
     TopAppBar(
         title = {
@@ -483,6 +544,16 @@ private fun FilesTopAppBar(
             }
         },
         actions = {
+            if (hasClipboard) {
+                IconButton(onClick = onPaste) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentPaste,
+                        contentDescription = "Paste",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
             IconButton(onClick = onAccountClick) {
                 Icon(
                     imageVector = Icons.Filled.AccountCircle,
@@ -506,7 +577,9 @@ private fun SelectionTopAppBar(
     onCut: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onFavorite: () -> Unit,
+    isFavorite: Boolean
 ) {
     TopAppBar(
         title = {
@@ -522,6 +595,13 @@ private fun SelectionTopAppBar(
             }
         },
         actions = {
+            IconButton(onClick = onFavorite) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = "Favorite",
+                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             IconButton(onClick = onCopy) { Icon(Icons.Filled.ContentCopy, "Copy") }
             IconButton(onClick = onCut) { Icon(Icons.Filled.ContentCut, "Cut") }
             IconButton(onClick = onRename) { Icon(Icons.Filled.DriveFileRenameOutline, "Rename") }

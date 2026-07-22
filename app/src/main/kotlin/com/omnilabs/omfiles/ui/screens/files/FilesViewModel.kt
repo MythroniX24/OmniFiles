@@ -5,11 +5,14 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.omnilabs.omfiles.domain.model.FileInfo
+import com.omnilabs.omfiles.domain.model.FileFilter
 import com.omnilabs.omfiles.domain.model.FileSortOptions
+import com.omnilabs.omfiles.domain.model.FileType
 import com.omnilabs.omfiles.domain.model.OperationResult
 import com.omnilabs.omfiles.domain.model.SortMode
 import com.omnilabs.omfiles.domain.model.SortOrder
 import com.omnilabs.omfiles.domain.repository.ArchiveRepository
+import com.omnilabs.omfiles.domain.repository.FavoriteRepository
 import com.omnilabs.omfiles.domain.repository.FileRepository
 import com.omnilabs.omfiles.domain.repository.RecentFilesRepository
 import com.omnilabs.omfiles.domain.repository.RecycleBinRepository
@@ -57,7 +60,10 @@ data class FilesUiState(
     val operationMessage: String? = null,
     // Clipboard for copy/cut → paste flow
     val clipboardPaths: List<String> = emptyList(),
-    val clipboardMode: String? = null  // "copy" or "cut"
+    val clipboardMode: String? = null,  // "copy" or "cut"
+    // Favorites + filter
+    val favoritePaths: Set<String> = emptySet(),
+    val currentFilter: FileFilter = FileFilter.ALL
 )
 
 @HiltViewModel
@@ -66,6 +72,7 @@ class FilesViewModel @Inject constructor(
     private val recentFilesRepository: RecentFilesRepository,
     private val archiveRepository: ArchiveRepository,
     private val recycleBinRepository: RecycleBinRepository,
+    private val favoriteRepository: FavoriteRepository,
     private val previewRegistry: PreviewRegistry,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -98,6 +105,8 @@ class FilesViewModel @Inject constructor(
     private val _operationMessage = MutableStateFlow<String?>(null)
     private val _clipboardPaths = MutableStateFlow<List<String>>(emptyList())
     private val _clipboardMode = MutableStateFlow<String?>(null)
+    private val _favoritePaths = MutableStateFlow<Set<String>>(emptySet())
+    private val _currentFilter = MutableStateFlow(FileFilter.ALL)
 
     // Use Iterable-based combine to avoid Kotlin 2.1 flow count limit on combine overloads
     val uiState: StateFlow<FilesUiState> = combine(
@@ -107,7 +116,8 @@ class FilesViewModel @Inject constructor(
             _showDeleteConfirmation, _showRenameDialog, _renameTarget,
             _showCreateFolderDialog, _showCreateFileDialog, _pendingDeletePaths,
             _showPropertiesDialog, _propertiesTarget, _showExtractDialog, _extractTarget,
-            _operationInProgress, _operationMessage, _clipboardPaths, _clipboardMode
+            _operationInProgress, _operationMessage, _clipboardPaths, _clipboardMode,
+            _favoritePaths, _currentFilter
         )
     ) { values ->
         FilesUiState(
@@ -132,7 +142,9 @@ class FilesViewModel @Inject constructor(
             operationInProgress = values[18] as Boolean,
             operationMessage = values[19] as String?,
             clipboardPaths = values[20] as List<String>,
-            clipboardMode = values[21] as String?
+            clipboardMode = values[21] as String?,
+            favoritePaths = values[22] as Set<String>,
+            currentFilter = values[23] as FileFilter
         )
     }.stateIn(
         scope = viewModelScope,
@@ -163,14 +175,38 @@ class FilesViewModel @Inject constructor(
                 )
                 _sortOptions.value = sortOptions
 
-                val fileList = fileRepository.getFiles(path, sortOptions, _showHidden.value).first()
-                _files.value = fileList
+                val rawList = fileRepository.getFiles(path, sortOptions, _showHidden.value).first()
+                _files.value = applyFilter(rawList, _currentFilter.value)
+                loadFavoritePaths(rawList)
                 recentFilesRepository.addRecentFile(path)
                 _isLoading.value = false
             } catch (e: Exception) {
                 _error.value = "Failed to load files: ${e.message}"
                 _isLoading.value = false
             }
+        }
+    }
+
+    private fun applyFilter(files: List<FileInfo>, filter: FileFilter): List<FileInfo> {
+        return when (filter) {
+            FileFilter.ALL -> files
+            FileFilter.FOLDERS -> files.filter { it.isDirectory }
+            FileFilter.FILES -> files.filter { !it.isDirectory }
+            FileFilter.IMAGES -> files.filter { it.fileType == FileType.IMAGE }
+            FileFilter.VIDEOS -> files.filter { it.fileType == FileType.VIDEO }
+            FileFilter.AUDIO -> files.filter { it.fileType == FileType.AUDIO }
+            FileFilter.DOCUMENTS -> files.filter { it.fileType == FileType.DOCUMENT }
+            FileFilter.ARCHIVES -> files.filter { it.fileType == FileType.ARCHIVE }
+            FileFilter.APK -> files.filter { it.fileType == FileType.APK }
+        }
+    }
+
+    private suspend fun loadFavoritePaths(files: List<FileInfo>) {
+        try {
+            val paths = files.map { it.path }
+            _favoritePaths.value = favoriteRepository.getFavoritePathsIn(paths)
+        } catch (_: Exception) {
+            _favoritePaths.value = emptySet()
         }
     }
 
@@ -212,6 +248,67 @@ class FilesViewModel @Inject constructor(
     fun enterSelectionMode(path: String) {
         _selectionMode.value = true
         _selectedFiles.value = setOf(path)
+    }
+
+    // ── Favorites ──
+
+    fun toggleFavorite(path: String) {
+        viewModelScope.launch {
+            val isFavorite = _favoritePaths.value.contains(path)
+            val result = if (isFavorite) {
+                favoriteRepository.removeFavorite(path)
+            } else {
+                favoriteRepository.addFavorite(path)
+            }
+            when (result) {
+                is OperationResult.Success -> {
+                    _favoritePaths.value = _favoritePaths.value.toMutableSet().apply {
+                        if (isFavorite) remove(path) else add(path)
+                    }
+                }
+                is OperationResult.Error -> _error.value = result.message
+            }
+        }
+    }
+
+    fun toggleFavoritesForSelection() {
+        viewModelScope.launch {
+            val paths = _selectedFiles.value.toList()
+            if (paths.isEmpty()) return@launch
+            val anyFavorite = paths.any { _favoritePaths.value.contains(it) }
+            val updated = _favoritePaths.value.toMutableSet()
+            var successCount = 0
+            var failCount = 0
+
+            for (path in paths) {
+                val isFavorite = updated.contains(path)
+                val shouldRemove = if (paths.size == 1) isFavorite else anyFavorite
+                val result = if (shouldRemove) {
+                    favoriteRepository.removeFavorite(path)
+                } else {
+                    favoriteRepository.addFavorite(path)
+                }
+                when (result) {
+                    is OperationResult.Success -> {
+                        if (shouldRemove) updated.remove(path) else updated.add(path)
+                        successCount++
+                    }
+                    is OperationResult.Error -> failCount++
+                }
+            }
+
+            _favoritePaths.value = updated
+            if (failCount > 0) {
+                _error.value = "Updated $successCount favorites, $failCount failed"
+            }
+        }
+    }
+
+    // ── Filter ──
+
+    fun setFilter(filter: FileFilter) {
+        _currentFilter.value = filter
+        refresh()
     }
 
     fun exitSelectionMode() {
